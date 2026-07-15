@@ -1,0 +1,38 @@
+name: mirbench_pp
+# miRBench post-processing (filter -> annotate -> exclude families -> negatives ->
+# train/test split -> conservation). Copied from
+# miRBench_paper/code/post_process/post_process.yml, with two changes:
+#   - renamed from `postprocess` to `mirbench_pp`
+#   - dropped the `defaults` and `hcc` channels (Anaconda ToS; everything here
+#     resolves from conda-forge/bioconda)
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pip
+
+  # clustering step (code/clustering/clustering.R)
+  - r-base
+  - bioconductor-biostrings
+  - bioconductor-decipher
+
+  # conservation step
+  - pybigwig
+
+  # negatives / general
+  - python-levenshtein
+  - pandas
+  - numpy
+  - matplotlib-base
+
+  # CLI / utilities for genomic_region_annotator
+  - click
+  - requests
+  - intervaltree
+  - biopython
+
+  - pip:
+      - pyranges
+      - gffutils
+      - git+https://github.com/BioGeMT/genomic_region_annotator.git@v1.0.0

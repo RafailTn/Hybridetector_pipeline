@@ -1,0 +1,20 @@
+name: eclip_dl
+# Downloading raw chimeric-eCLIP reads from GEO/SRA/ENA.
+# This replaces miRBench_paper/code/scripts_to_download_eCLIP_Manakov_2022/env.yaml,
+# which pins ~120 exact builds and hardcodes a University of Malta ftp_proxy.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - pandas
+  - requests
+  - tqdm
+  - sra-tools      # prefetch / fasterq-dump (works for any GEO/SRA accession)
+  - entrez-direct  # esearch/efetch: GSE -> GSM -> SRX -> SRR
+  - pigz
+  - aria2
+  - wget
+  - pip
+  - pip:
+      - geoparse   # used by getSRX_geoparse.py to walk a GSE

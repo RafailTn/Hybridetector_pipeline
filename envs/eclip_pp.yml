@@ -1,0 +1,18 @@
+name: eclip_pp
+# Read preprocessing before HybriDetector, following the YeoLab chim-eCLIP recipe
+# (https://github.com/YeoLab/chim-eCLIP#extract-umi-and-trim):
+#   1. extract the 5' UMI into the read name
+#   2. trim the 3' adapters
+#   3. trim the 3' UMI remnant
+# Mirrors the package list in
+# miRBench_paper/code/preprocess_downloaded_eCLIP_for_HD/README.md.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - umi_tools
+  - cutadapt
+  - fastqc
+  - pigz
+  - seqkit

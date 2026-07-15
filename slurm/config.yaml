@@ -1,0 +1,54 @@
+# Snakemake 7 SLURM profile for HybriDetector.
+#
+#   snakemake --profile chimeric_eclip/slurm ...
+#
+# Each rule becomes one sbatch job. The Snakefile's `resources: mem` (in GB) and
+# `threads` are passed straight through, so the STAR genome-index rule asks the
+# scheduler for its real 200 GB rather than being squeezed like it is on the laptop.
+
+cluster: >-
+  sbatch
+  --partition={resources.partition}
+  --cpus-per-task={threads}
+  --mem={resources.mem}G
+  --time={resources.time}
+  --job-name=hd.{rule}
+  --output=slurm_logs/{rule}/{rule}.{wildcards}.%j.out
+  --error=slurm_logs/{rule}/{rule}.{wildcards}.%j.err
+  --parsable
+
+default-resources:
+  - partition=compute        # <-- CHANGE to your cluster's partition name
+  - mem=16
+  - time="24:00:00"
+
+# STAR against hg38 needs a big node and a long slot; everything else is modest.
+set-resources:
+  - STAR_gen_index:mem=64
+  - STAR_gen_index:time="12:00:00"
+  - alignment_single_genomic:mem=48
+  - alignment_single_genomic:time="12:00:00"
+  - alignment_softclip:mem=48
+  - alignment_softclip:time="12:00:00"
+  - disambiguate_and_filter:time="24:00:00"
+  - filter_and_collapse:mem=64
+  - filter_and_collapse:time="24:00:00"
+  - unify_length:mem=64
+  - unify_length:time="24:00:00"
+
+# STAR's own threads; the scheduler gets these via --cpus-per-task.
+set-threads:
+  - STAR_gen_index=16
+  - alignment_single_genomic=16
+  - alignment_softclip=16
+
+jobs: 20                      # max concurrent sbatch jobs
+local-cores: 2
+latency-wait: 120             # shared filesystems lag; do not lower this
+restart-times: 1
+keep-going: true
+rerun-incomplete: true
+printshellcmds: true
+
+use-conda: true
+conda-frontend: mamba

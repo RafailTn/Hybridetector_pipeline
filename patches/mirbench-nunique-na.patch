@@ -1,0 +1,39 @@
+diff --git a/code/filtering/filtering.py b/code/filtering/filtering.py
+index e7a8909..7f2572e 100644
+--- a/code/filtering/filtering.py
++++ b/code/filtering/filtering.py
+@@ -21,7 +21,13 @@ def filter_and_create_table(data):
+         'start': filtered_data['start.g'],
+         'end': filtered_data['end.g'],
+         'strand': filtered_data['strand.g'],
+-        'Nunique': filtered_data['Nunique']
++        # Nunique is the UMI-deduplicated read support. HybriDetector only computes it
++        # when the library carries UMIs (is_umi=TRUE); run without them and the column
++        # does not exist at all. Some series (e.g. GSE297116) deposit reads whose UMIs
++        # were already pruned and discarded, so the support cannot be PCR-corrected --
++        # write NA rather than substituting the PCR-inflated Ndups, which would look
++        # like a real count and silently be compared against datasets where it is one.
++        'Nunique': filtered_data['Nunique'] if 'Nunique' in filtered_data.columns else pd.NA
+     }, columns=['gene', 'noncodingRNA', 'noncodingRNA_name', 'noncodingRNA_fam', 'feature', 'test', 'label', 'chr', 'start', 'end', 'strand', 'Nunique'])
+ 
+     return filtered_table
+diff --git a/code/make_neg_sets/make_neg_sets.py b/code/make_neg_sets/make_neg_sets.py
+index 8d46a0a..ef7a752 100644
+--- a/code/make_neg_sets/make_neg_sets.py
++++ b/code/make_neg_sets/make_neg_sets.py
+@@ -94,8 +94,13 @@ def process_block(block, positive_samples, all_clusters, output_file):
+     # Add the label column to negatives_df
+     negatives_df['label'] = 0
+ 
+-    # Add Nunique column set to 0 for negative examples
+-    negatives_df['Nunique'] = 0
++    # Add Nunique column set to 0 for negative examples -- but only when the positives
++    # actually carry read support. If the source library had no recoverable UMIs, the
++    # positives' Nunique is NA (see filtering.py), and writing 0 here would leave a
++    # column that is NA for one class and 0 for the other: it would look populated,
++    # and anything reading it would quietly get a perfect label separator instead of
++    # failing. Keep the whole column NA in that case.
++    negatives_df['Nunique'] = 0 if block['Nunique'].notna().any() else pd.NA
+ 
+     # Reorder columns in negatives_df to match the order in block
+     negatives_df = negatives_df[block.columns]

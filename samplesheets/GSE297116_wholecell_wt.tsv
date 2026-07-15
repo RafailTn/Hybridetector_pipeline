@@ -1,0 +1,15 @@
+# GSE297116 — "Nuclear Argonaute:miRNA complexes recognize target sequences within
+# chromatin and silence gene expression". AGO2 miR-eCLIP (Eclipsebio) in HCT116.
+#
+# Selection: wild-type HCT116, WHOLE CELL, IP libraries only.
+#   - dropped `(input)`: size-matched controls, no AGO2 pulldown, so no chimeras
+#   - dropped NLS-AGO2: engineered nuclear-localized AGO2, a different targetome
+#   - dropped cytoplasm / chromatin fractions — those are in their own sheets,
+#     GSE297116_cytoplasm_wt.tsv and GSE297116_chromatin_wt.tsv (chromatin = nuclear)
+#
+# Each sample has two SRA runs — one deep run plus a small top-off of the same
+# library — which stage 1 concatenates into a single FASTQ.
+#
+# sample_name	srr_runs	# GSM / title
+HCT116_wholecell_rep1_IP	SRR33558257,SRR33558258	# GSM8984092 / HCT116, whole cell, replicate 1 (IP)
+HCT116_wholecell_rep2_IP	SRR33558254,SRR33558255	# GSM8984094 / HCT116, whole cell, replicate 2 (IP)

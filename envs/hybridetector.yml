@@ -1,0 +1,17 @@
+name: hybridetector
+# Driver env for the HybriDetector Snakemake workflow. It contains ONLY snakemake +
+# a conda frontend; every rule brings its own env from HybriDetector/wraps/*/env.yaml,
+# built at runtime by `--use-conda --conda-frontend mamba`.
+#
+# Upstream (HybriDetector_env.yml) pins `snakemake = 7.18.2` and an unpinned `mamba`.
+# We keep the snakemake pin (the workflow uses the pre-8 CLI: --res, --conda-frontend)
+# but pin mamba to the 1.x line, because mamba 2.x rewrote `mamba env create` and
+# snakemake 7's conda frontend drives it through the old interface.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - snakemake=7.18.2
+  - mamba=1.5.*
+  - pandas

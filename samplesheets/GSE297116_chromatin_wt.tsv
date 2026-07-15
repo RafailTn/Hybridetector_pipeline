@@ -1,0 +1,24 @@
+# GSE297116 — "Nuclear Argonaute:miRNA complexes recognize target sequences within
+# chromatin and silence gene expression". AGO2 miR-eCLIP (Eclipsebio) in HCT116.
+#
+# Selection: wild-type HCT116, CHROMATIN fraction, IP libraries only.
+#   - dropped `(input)`: size-matched controls, no AGO2 pulldown, so no chimeras
+#   - dropped NLS-AGO2: engineered nuclear-localized AGO2, a different targetome
+#   - dropped whole-cell and cytoplasm fractions (separate sheets)
+#
+# This is the NUCLEAR compartment of the study. The series has no fraction literally
+# labelled "nuclear"; it fractionates AGO2 into whole cell / cytoplasm / chromatin,
+# and the chromatin-associated fraction IS the nuclear AGO2 the paper is about. Pair
+# it with GSE297116_cytoplasm_wt.tsv for a nuclear-vs-cytoplasmic comparison.
+#
+# Each sample has two SRA runs — one deep run plus a small top-off of the same
+# library — which stage 1 concatenates into a single FASTQ.
+#
+# READ STATE: assumed already-trimmed like the whole-cell fraction (same submitter,
+# same protocol) → skip stage 2, run HybriDetector with IS_UMI=FALSE. VERIFY per the
+# project rule by running check_read_state.sh on one run (e.g. SRR33558239) before
+# processing; it is a new fraction, not a re-run of an already-checked library.
+#
+# sample_name	srr_runs	# GSM / title
+HCT116_chromatin_rep1_IP	SRR33558239,SRR33558240	# GSM8984104 / HCT116, chromatin, replicate 1 (IP)
+HCT116_chromatin_rep2_IP	SRR33558236,SRR33558237	# GSM8984106 / HCT116, chromatin, replicate 2 (IP)

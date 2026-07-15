@@ -1,0 +1,27 @@
+# GSE304955 — "Chimeric AGO2-miR-eCLIP analysis of LIMD1 deficient (CRISPR-Cas9 edited)
+# human SAEC cells" (Crozier/Sharp). Chimeric AGO2 miR-eCLIP in human small-airway
+# epithelial cells. 24 samples = 12 (input) + 12 (IP), in three CRISPR genotypes.
+#
+# Selection: Cas9 control (LIMD1+/+) IP libraries only.
+#   - dropped all 12 `(input)`: size-matched controls, no AGO2 pulldown, so no chimeras
+#   - dropped LIMD1-/- (KO) and LIMD1+/- (Het): LIMD1 is a miRISC component that
+#     scaffolds AGO2-TNRC6, so a LIMD1-deficient cell has, by the paper's own thesis, a
+#     PERTURBED miRNA targetome. Those 8 IP libraries are the experimental arm, not
+#     miRNA-target ground truth; mixing them into a general binding dataset would train
+#     on interactions the study exists to show are altered. (Same reasoning that dropped
+#     NLS-AGO2 from GSE297116.)
+#
+# What remains is 3 biological clones (C2, C3, C4) across 4 libraries — C4 was sequenced
+# as two technical replicates, both kept for depth. One SRA run per sample, single-end.
+#
+# Reads are RAW (checked with check_read_state.sh on SRR34920816: verdict RAW 4-0 —
+# 115 nt uniform, 3' adapter in 51.0%, 10 nt 5' randomer, miRNA at offset 11-12).
+# So, UNLIKE GSE297116: run stage 2, and set IS_UMI=TRUE.
+#
+# Depth: ~284M reads total (74.8 + 91.9 + 62.8 + 54.9 M spots), ~10x GSE297116.
+#
+# sample_name	srr_runs	# GSM / title
+SAEC_Cas9ctrl_C2_IP	SRR34920806	# GSM9160218 / Cas9 control C2 (IP)
+SAEC_Cas9ctrl_C3_IP	SRR34920816	# GSM9160216 / Cas9 control C3 (IP)
+SAEC_Cas9ctrl_C4_tr1_IP	SRR34920807	# GSM9160219 / Cas9 control C4 technical replicate 1 (IP)
+SAEC_Cas9ctrl_C4_tr2_IP	SRR34920805	# GSM9160217 / Cas9 control C4 technical replicate 2 (IP)
