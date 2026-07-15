@@ -131,6 +131,37 @@ TESTS=data/myset/step6_add_conservation/<...>.test.<...>.conservation.tsv \
 bash cnn/run_train.sh kfold
 ```
 
+## How much of a new series is actually new?
+
+Before treating a new series' positives as fresh training signal, ask how many are just
+re-observations of interactions the existing datasets already contain (Manakov alone is
+~1.4M positives). `positive_overlap.py` answers that:
+
+```bash
+dependencies/.pixi/envs/default/bin/python chimeric_eclip/positive_overlap.py \
+    --input data/myset/step6_add_conservation/*.conservation.tsv \
+    --merged-out data/myset_positives_merged_v7.tsv \
+    --novel-out  data/myset_positives_novel_v7.tsv
+```
+
+`--input` takes the step-6 v7 files (label==1 kept); `--ref` defaults to the six miRBench
+files (Manakov train/test/leftout, Hejret train/test, Klimentova test) but takes any
+baseline you pass. It reports three definitions of "already seen", per reference dataset
+and combined, then writes the novel subset:
+
+| definition | what it requires |
+| --- | --- |
+| exact coords + miRNA | identical chr/start/end/strand **and** same miRNA — almost always an undercount, since HybriDetector anchors its 50 nt window on the read, so two experiments rarely produce byte-identical intervals |
+| **site overlap + same miRNA** | the target intervals overlap **and** the miRNA matches — **the one to quote**, robust to that window jitter |
+| site overlap, any miRNA | the target intervals overlap, regardless of miRNA |
+
+The gap between the last two is the interesting part: sites where a *different* miRNA hits
+the *same* AGO2-bound locus — novelty that lives in the assignment, not the target. For
+GSE304955 (SAEC), 30% of positives were same-miRNA re-hits of a Manakov site while 73.5%
+were the same locus with a different miRNA, so `--novel-out` kept ~105k of 150k. `--novel-out`
+is written under the middle definition. Both output files hold **positives only** — the
+matching negatives are dropped, so it is a novelty audit, not a ready-to-train set.
+
 ## Things worth knowing before you run it
 
 **Protocol assumptions live in stage 2.** The defaults are chim-eCLIP (Manakov):
