@@ -1,8 +1,7 @@
 # Building miRBench-style datasets from a new chimeric eCLIP experiment
 
 This turns raw chimeric-eCLIP/CLASH/CLEAR-CLIP reads into a labelled v7 TSV with the
-same 18 columns as `data/AGO2_eCLIP_Manakov2022_train_v7.tsv`, so a new experiment can
-be fed to `cnn/run_train.sh` without touching the model code.
+same 18 columns as `data/AGO2_eCLIP_Manakov2022_train_v7.tsv`.
 
 It is a thin local driver over two upstream repos, cloned into `external/` (gitignored):
 
