@@ -114,12 +114,19 @@ echo "== ${#SAMPLES[@]} sample(s): ${SAMPLES[*]}"
 # 16 nt of noncoding RNA"). Set it too high and shorter, flimsier miRNA alignments pass;
 # too low and real chimeras are rejected. It must be the max length of the reads
 # HybriDetector actually sees — i.e. *after* stage 2 stripped the UMIs and adapters —
-# which is not the read length GEO advertises. So measure it rather than assume it.
+# which is not the read length GEO advertises. So measure it rather than assume it, and
+# do so PER SAMPLE: a batch can mix libraries of different length (pre-trimmed reads are
+# variable-length), and one global max would over-set the threshold for the shorter ones.
+READ_LENGTHS=()
+while IFS= read -r rl; do READ_LENGTHS+=("$rl"); done \
+    < <(read_lengths_for eclip_pp "$READ_LENGTH" "${FQS[@]}")
 if [ "$READ_LENGTH" = "auto" ]; then
-    READ_LENGTH=$(mm_run eclip_pp seqkit stats -T "${FQS[@]}" \
-                  | awk 'NR>1 {if ($8+0 > m) m = $8+0} END {print m}')
-    echo "== measured read_length (post-trim max) = $READ_LENGTH"
+    echo "== measured per-sample read_length (post-trim max):"
+    for i in "${!SAMPLES[@]}"; do echo "     ${SAMPLES[$i]} = ${READ_LENGTHS[$i]}"; done
+else
+    echo "== read_length (manual override, all samples) = $READ_LENGTH"
 fi
+RL_JOINED=$(printf '"%s",' "${READ_LENGTHS[@]}" | sed 's/,$//')
 
 # Build the config HybriDetector.py would have written, but without going through it:
 # it hardcodes `--res mem=<ram>`, and we need mem and the STAR RAM cap decoupled.
@@ -131,7 +138,7 @@ CONFIG="$HD_DIR/config.json"
     printf ' "map_perc_single_genomic":[%s],\n' "$(printf '"0.85",%.0s' "${SAMPLES[@]}" | sed 's/,$//')"
     printf ' "map_perc_softclip":[%s],\n'      "$(printf '"0.75",%.0s' "${SAMPLES[@]}" | sed 's/,$//')"
     printf ' "is_umi":[%s],\n'                 "$(printf "\"$IS_UMI\",%.0s" "${SAMPLES[@]}" | sed 's/,$//')"
-    printf ' "read_length":[%s],\n'            "$(printf "\"$READ_LENGTH\",%.0s" "${SAMPLES[@]}" | sed 's/,$//')"
+    printf ' "read_length":[%s],\n'            "$RL_JOINED"
     printf ' "cores":[%s],\n'                  "$(printf "\"$CORES\",%.0s" "${SAMPLES[@]}" | sed 's/,$//')"
     printf ' "ram":[%s]\n'                     "$(printf "\"$MEM_GB\",%.0s" "${SAMPLES[@]}" | sed 's/,$//')"
     printf '}\n'

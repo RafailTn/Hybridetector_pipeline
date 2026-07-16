@@ -28,7 +28,9 @@
 #                       *different gene cluster*, keeping each miRNA family's share of
 #                       the negative class equal to its share of the positive class.
 #                       That is the frequency-class-bias fix the paper is named for —
-#                       a model cannot win by memorising which miRNAs are common.
+#                       a model cannot win by memorising which miRNAs are common. The
+#                       ratio is a FIXED 1 negative per positive (num_neg = block size in
+#                       miRBench's make_neg_sets.py) — the sampler exposes no ratio knob.
 #   4 train/test split  on the `test` column, which step 0 sets from chr.g == "1":
 #                       chromosome 1 is the held-out test set, everything else trains
 #   5 drop test col
@@ -37,7 +39,7 @@
 # The result has exactly the 18 columns of the existing *_v7.tsv files, so it drops
 # straight into cnn/run_train.sh as TRAIN=/TESTS=.
 #
-# Env vars: NEG_RATIO (negatives per positive, default 1), PHYLOP_BW, PHASTCONS_BW.
+# Env vars: PHYLOP_BW, PHASTCONS_BW.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_env mirbench_pp
@@ -87,7 +89,20 @@ fi
 
 # Concatenate the per-sample hybrid tables, keeping only the first header. (Upstream's
 # concat_HD_output.sh does exactly this; inlined to avoid its SLURM preamble.)
-if [ ! -s "$CONCAT" ]; then
+#
+# The concatenation is cached so an identical re-run (e.g. resuming after a failed postprocess
+# step) need not redo it — but the cache is keyed on a MANIFEST of the selected inputs (path +
+# size + mtime), not merely on $CONCAT existing. So changing the sample globs, or editing or
+# replacing the hybrid tables, reuses the same OUT_DIR but rebuilds the concatenation instead
+# of silently serving the previous selection's file. Sorted so pattern order is irrelevant.
+MANIFEST="$CONCAT.manifest"
+new_manifest=$(for f in "${FILES[@]}"; do
+    printf '%s\t%s\t%s\n' "$f" "$(file_size "$f")" "$(file_mtime "$f")"
+done | sort)
+
+if [ -s "$CONCAT" ] && [ -f "$MANIFEST" ] && [ "$(cat "$MANIFEST")" = "$new_manifest" ]; then
+    echo "== reusing cached concatenation ($CONCAT): ${#FILES[@]} input(s) unchanged"
+else
     echo "== concatenating ${#FILES[@]} hybrid table(s) from $HYB_DIR"
     first=1
     for f in "${FILES[@]}"; do
@@ -95,6 +110,7 @@ if [ ! -s "$CONCAT" ]; then
         if [ "$first" = 1 ]; then cat "$f" > "$CONCAT"; first=0
         else tail -n +2 "$f" >> "$CONCAT"; fi
     done
+    printf '%s\n' "$new_manifest" > "$MANIFEST"   # only after a complete concat
 fi
 echo "== $(( $(wc -l < "$CONCAT") - 1 )) hybrid rows"
 

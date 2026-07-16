@@ -17,10 +17,20 @@
 # size-matched `(input)` controls — no AGO2 pulldown, so no miRNA:target ligations —
 # and pushing those through HybriDetector just burns hours to find nothing.
 #
-# Reads are single-end here; where a run comes back paired, only R1 is kept, which is
-# where the chimera lives (miRBench did the same for Manakov).
+# PAIRED RUNS: HybriDetector is single-end (one data/<sample>.fastq.gz per sample), so only
+# one mate can go downstream. `MATE` (default 1) picks which. Mate 1 is right for chim-eCLIP
+# — Manakov's UMI+miRNA sit at the 5' end of R1, and miRBench used R1 — but that is a fact
+# about THAT protocol, not about chimeric protocols in general. A CLASH/CLEAR-CLIP variant
+# can carry the miRNA (or part of the duplex) in R2, and then mate 1 is the wrong choice and
+# real signal is lost. So check your protocol's read layout before trusting the default.
 #
-# Env vars: THREADS (default: CPU count), KEEP_SRA=1 to keep the .sra prefetch cache.
+# The unused mate is NOT deleted: it is parked, gzipped, under <out>/unused_mates/ so the
+# choice stays reversible (DROP_R2=1 to discard it instead and save the disk). It lives in a
+# subdirectory on purpose — stage 3 globs <dir>/*.fastq.gz at maxdepth 1 to find samples, so
+# a parked mate sitting beside them would be picked up as a bogus extra sample.
+#
+# Env vars: THREADS (default: CPU count), KEEP_SRA=1 to keep the .sra prefetch cache,
+#           MATE=1|2 (which mate carries the chimera), DROP_R2=1 to discard the unused mate.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_env eclip_dl
@@ -36,6 +46,9 @@ while [ $# -gt 0 ]; do
 done
 : "${OUT_DIR:?--out is required}"
 THREADS="${THREADS:-$(n_cpus)}"
+MATE="${MATE:-1}"            # which mate carries the chimera (1 = chim-eCLIP / Manakov)
+DROP_R2="${DROP_R2:-0}"      # 1 = discard the unused mate instead of parking it
+case "$MATE" in 1|2) ;; *) echo "Error: MATE must be 1 or 2 (got '$MATE')" >&2; exit 1 ;; esac
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 
@@ -94,10 +107,27 @@ while IFS=$'\t' read -r sample runs _; do
             mm_run eclip_dl prefetch --max-size u -O "$OUT_DIR/sra" "$srr"
             mm_run eclip_dl fasterq-dump --split-files --threads "$THREADS" \
                 -O "$OUT_DIR" "$OUT_DIR/sra/$srr/$srr.sra"
-            # keep R1 only; single-end runs come out unsuffixed
-            if [ -f "$OUT_DIR/${srr}_1.fastq" ]; then
-                mv "$OUT_DIR/${srr}_1.fastq" "$OUT_DIR/$srr.fastq"
-                rm -f "$OUT_DIR/${srr}_2.fastq"
+            # --split-files gives <srr>_1/_2 when paired, plain <srr> when single-end (though
+            # some single-end runs still come back as _1 only — hence the three-way branch).
+            if [ -f "$OUT_DIR/${srr}_1.fastq" ] && [ -f "$OUT_DIR/${srr}_2.fastq" ]; then
+                other=$(( MATE == 1 ? 2 : 1 ))
+                echo "   !! $srr is PAIRED-END. Keeping mate $MATE as the chimeric read;"
+                echo "      mate $other cannot go downstream (HybriDetector is single-end)."
+                echo "      Mate 1 is correct for chim-eCLIP (UMI+miRNA at the 5' end of R1)."
+                echo "      If your protocol puts the chimera in the other mate, set MATE=$other."
+                if [ "$DROP_R2" = "1" ]; then
+                    echo "      DROP_R2=1 -> discarding mate $other"
+                    rm -f "$OUT_DIR/${srr}_${other}.fastq"
+                else
+                    mkdir -p "$OUT_DIR/unused_mates"
+                    mm_run eclip_dl pigz -p "$THREADS" -c "$OUT_DIR/${srr}_${other}.fastq" \
+                        > "$OUT_DIR/unused_mates/${srr}_${other}.fastq.gz"
+                    rm -f "$OUT_DIR/${srr}_${other}.fastq"
+                    echo "      mate $other kept at unused_mates/${srr}_${other}.fastq.gz (DROP_R2=1 to discard)"
+                fi
+                mv "$OUT_DIR/${srr}_${MATE}.fastq" "$OUT_DIR/$srr.fastq"
+            elif [ -f "$OUT_DIR/${srr}_1.fastq" ]; then
+                mv "$OUT_DIR/${srr}_1.fastq" "$OUT_DIR/$srr.fastq"   # single-end, _1-suffixed
             fi
             [ "${KEEP_SRA:-0}" = "1" ] || rm -rf "$OUT_DIR/sra/$srr"
         fi

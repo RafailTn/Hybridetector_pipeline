@@ -73,10 +73,33 @@ file_size() {
     stat -c %s "$1" 2>/dev/null || stat -f %z "$1" 2>/dev/null || echo 0
 }
 
+# Modification time of a file, epoch seconds (GNU stat vs BSD/macOS stat).
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
+
 # Run a command inside one of the four micromamba envs.
 mm_run() {
     local env_name="$1"; shift
     "$MICROMAMBA" run -n "$env_name" "$@"
+}
+
+# Echo one read_length per input FASTQ, in argument order, one per line. HybriDetector derives
+# the min miRNA-align fraction ceil(16/read_length*100)/100 *per sample*, so a batch that mixes
+# libraries of different length must get a per-sample array, not one global max (too lenient for
+# the shorter samples). 'auto' measures each file's own max insert length (seqkit stats col 8 =
+# max_len); a numeric mode is echoed verbatim for every file (a manual override for all).
+# Args: <seqkit_env> <mode: auto|N> <fastq>...
+read_lengths_for() {
+    local env_name="$1" mode="$2"; shift 2
+    local fq
+    for fq in "$@"; do
+        if [ "$mode" = "auto" ]; then
+            mm_run "$env_name" seqkit stats -T "$fq" | awk 'NR==2 {print $8+0}'
+        else
+            printf '%s\n' "$mode"
+        fi
+    done
 }
 
 require_env() {
