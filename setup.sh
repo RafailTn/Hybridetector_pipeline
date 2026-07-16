@@ -10,7 +10,7 @@
 #   bash chimeric_eclip/setup.sh --prebuild-hd-envs
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
-ENVS_DIR="$REPO_ROOT/chimeric_eclip/envs"
+ENVS_DIR="$PIPELINE_DIR/envs"
 
 # ── micromamba ─────────────────────────────────────────────────────────────
 if [ ! -x "$MICROMAMBA" ]; then
@@ -21,7 +21,7 @@ if [ ! -x "$MICROMAMBA" ]; then
     # layout up with the destination via --strip-components — that only works if
     # $MICROMAMBA happens to end in .../bin/micromamba, and silently drops the binary
     # one directory too high when it doesn't.
-    _mm_tmp="$(mktemp -d)"
+    _mm_tmp="$(mktemp -d "${TMPDIR:-/tmp}/mm.XXXXXX")"
     trap 'rm -rf "$_mm_tmp"' EXIT
     curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
         | tar -xj -C "$_mm_tmp" bin/micromamba
@@ -50,9 +50,13 @@ fi
 # See chimeric_eclip/patches/hybridetector-fixes.patch and the README.
 if git -C "$HD_DIR" diff --quiet; then
     echo "== applying hybridetector-fixes.patch"
-    git -C "$HD_DIR" apply "$REPO_ROOT/chimeric_eclip/patches/hybridetector-fixes.patch"
+    git -C "$HD_DIR" apply "$PIPELINE_DIR/patches/hybridetector-fixes.patch"
 else
+    # A dirty tree means the patch is already applied — but it also means a *newer* patch
+    # revision won't land here. To pick up patch changes, reset the clone first:
+    #   git -C external/HybriDetector checkout .   (or delete it and let setup.sh re-clone)
     echo "== HybriDetector already patched (working tree dirty), skipping"
+    echo "   (to apply an updated patch: git -C \"$HD_DIR\" checkout . && rerun setup.sh)"
 fi
 mkdir -p "$HD_DIR/data"
 
@@ -61,7 +65,7 @@ mkdir -p "$HD_DIR/data"
 # datasets, which all carry UMIs. See the "Datasets without UMIs" section of the README.
 if git -C "$MIRBENCH_DIR" diff --quiet; then
     echo "== applying mirbench-nunique-na.patch"
-    git -C "$MIRBENCH_DIR" apply "$REPO_ROOT/chimeric_eclip/patches/mirbench-nunique-na.patch"
+    git -C "$MIRBENCH_DIR" apply "$PIPELINE_DIR/patches/mirbench-nunique-na.patch"
 else
     echo "== miRBench_paper already patched (working tree dirty), skipping"
 fi
@@ -100,7 +104,7 @@ JSON
     ( cd "$HD_DIR" && mm_run hybridetector snakemake \
         --snakefile HybriDetector.smk --configfile config_envbuild.json \
         --use-conda --conda-frontend mamba --conda-create-envs-only \
-        --res mem=28 -j "$(nproc)" )
+        --res mem=28 -j "$(n_cpus)" )
     rm -f "$HD_DIR/data/_ENVBUILD.fastq.gz" "$HD_DIR/data/_ENVBUILD2.fastq.gz"
 fi
 

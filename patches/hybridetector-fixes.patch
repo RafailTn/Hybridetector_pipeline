@@ -1,5 +1,5 @@
 diff --git a/HybriDetector.smk b/HybriDetector.smk
-index 2b81af9..9673091 100755
+index 2b81af9..24352f2 100755
 --- a/HybriDetector.smk
 +++ b/HybriDetector.smk
 @@ -1,4 +1,5 @@
@@ -8,8 +8,11 @@ index 2b81af9..9673091 100755
  import subprocess
  import json
  import re
-@@ -9,6 +10,19 @@ from snakemake.utils import R
+@@ -7,8 +8,50 @@ import glob
+ import pandas as pd
+ from snakemake.utils import R
  from snakemake.utils import report
++from snakemake.exceptions import WorkflowError
  from os.path import split
  
 +# Per-rule memory budgets. The DEFAULTS BELOW ARE UPSTREAM'S — a cluster gets stock
@@ -18,17 +21,45 @@ index 2b81af9..9673091 100755
 +# fit 31 GB, together with STAR_SA_SPARSE_D=2).
 +#
 +# Do not fold the low-memory values back in as defaults: a sparse suffix array is NOT
-+# alignment-neutral (measured: 7286 differing records vs a 744-record RNG noise floor),
-+# so it must be an explicit, local opt-in rather than something that quietly follows the
-+# pipeline onto other machines.
++# alignment-neutral (measured: 6931 differing reads vs a 1224-read RNG noise floor on a
++# chr21 control, 5.7x), so it must be an explicit, local opt-in rather than something that
++# quietly follows the pipeline onto other machines.
 +HD_MEM_INDEX = int(os.environ.get("HD_MEM_INDEX", 200))   # STAR genomeGenerate rules
 +HD_MEM_ALIGN = int(os.environ.get("HD_MEM_ALIGN", 50))    # ncRNA alignment / disambiguate
 +HD_MEM_SMALL = int(os.environ.get("HD_MEM_SMALL", 34))    # genomic align, dedup, pairs
 +
++# Guard: STAR_gen_index takes --genomeSAsparseD from the environment (STAR_SA_SPARSE_D), but
++# the rule declares only the genome FASTA as input — so if an index/STAR/ already exists,
++# Snakemake REUSES it whatever sparsity is now requested, and the run would proceed as if it
++# were the requested mode (the trap: a leftover sparse index under a dense request, silently
++# not comparable to Manakov). STAR records what it actually used in genomeParameters.txt;
++# refuse to run on a mismatch. Living in the Snakefile, this protects direct `snakemake`
++# calls too, not only chimeric_eclip/03_run_hybridetector*.sh.
++onstart:
++    _sa = "index/STAR/SAindex"
++    _gp = "index/STAR/genomeParameters.txt"
++    if os.path.exists(_sa) and os.path.exists(_gp):
++        _want = os.environ.get("STAR_SA_SPARSE_D", "1")
++        _have = None
++        with open(_gp) as _fh:
++            for _line in _fh:
++                _fields = _line.split()
++                if _fields and _fields[0] == "genomeSAsparseD":
++                    _have = _fields[1] if len(_fields) > 1 else None
++                    break
++        if _have and _have != _want:
++            raise WorkflowError(
++                "Genome STAR index in index/STAR was built with --genomeSAsparseD %s, but "
++                "this run requests %s (STAR_SA_SPARSE_D; 1=dense, 2=sparse). Snakemake does "
++                "not track that flag, so it would reuse the on-disk (%s) index under a (%s) "
++                "request, silently producing output that contradicts the requested mode. "
++                "Rebuild: rm -rf index/STAR   (or set STAR_SA_SPARSE_D=%s to accept it)."
++                % (_have, _want, _have, _want, _have))
++
  ###################
  ## CLASH analysis ##
  ###################
-@@ -42,11 +56,35 @@ wildcard_constraints:
+@@ -42,11 +85,35 @@ wildcard_constraints:
  
  
  
@@ -67,7 +98,7 @@ index 2b81af9..9673091 100755
  
  rule all:
      input:
-@@ -90,7 +128,7 @@ rule STAR_gen_index:
+@@ -90,7 +157,7 @@ rule STAR_gen_index:
      output: SAindex = "index/STAR/SAindex",
      params: dir = "index/STAR",
              log = "index/STAR/Log.out",
@@ -76,7 +107,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR.indexation_run.log",
      threads:    40
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -101,7 +139,7 @@ rule STAR_mirna_gen_index:
+@@ -101,7 +168,7 @@ rule STAR_mirna_gen_index:
      output: SAindex = "index/STAR_mirna/SAindex",
      params: dir = "index/STAR_mirna",
              log = "index/STAR_mirna/Log.out",
@@ -85,7 +116,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_mirna.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -112,7 +150,7 @@ rule STAR_rrna_gen_index:
+@@ -112,7 +179,7 @@ rule STAR_rrna_gen_index:
      output: SAindex = "index/STAR_rrna/SAindex",
      params: dir = "index/STAR_rrna",
              log = "index/STAR_rrna/Log.out",
@@ -94,7 +125,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_rrna.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -123,7 +161,7 @@ rule STAR_snorna_gen_index:
+@@ -123,7 +190,7 @@ rule STAR_snorna_gen_index:
      output: SAindex = "index/STAR_snorna/SAindex",
      params: dir = "index/STAR_snorna",
              log = "index/STAR_snorna/Log.out",
@@ -103,7 +134,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_snorna.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -134,7 +172,7 @@ rule STAR_trna_ens_gen_index:
+@@ -134,7 +201,7 @@ rule STAR_trna_ens_gen_index:
      output: SAindex = "index/STAR_trna_ens/SAindex",
      params: dir = "index/STAR_trna_ens",
              log = "index/STAR_trna_ens/Log.out",
@@ -112,7 +143,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_trna_ens.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -145,7 +183,7 @@ rule STAR_trna_gtrnadb_gen_index:
+@@ -145,7 +212,7 @@ rule STAR_trna_gtrnadb_gen_index:
      output: SAindex = "index/STAR_trna_gtrnadb/SAindex",
      params: dir = "index/STAR_trna_gtrnadb",
              log = "index/STAR_trna_gtrnadb/Log.out",
@@ -121,7 +152,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_trna_gtrnadb.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -156,7 +194,7 @@ rule STAR_trna_ncbi_gen_index:
+@@ -156,7 +223,7 @@ rule STAR_trna_ncbi_gen_index:
      output: SAindex = "index/STAR_trna_ncbi/SAindex",
      params: dir = "index/STAR_trna_ncbi",
              log = "index/STAR_trna_ncbi/Log.out",
@@ -130,7 +161,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_trna_ncbi.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -167,7 +205,7 @@ rule STAR_trna_ucsc_gen_index:
+@@ -167,7 +234,7 @@ rule STAR_trna_ucsc_gen_index:
      output: SAindex = "index/STAR_trna_ucsc/SAindex",
      params: dir = "index/STAR_trna_ucsc",
              log = "index/STAR_trna_ucsc/Log.out",
@@ -139,7 +170,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_trna_ucsc.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -178,7 +216,7 @@ rule STAR_vaultrna_gen_index:
+@@ -178,7 +245,7 @@ rule STAR_vaultrna_gen_index:
      output: SAindex = "index/STAR_vaultrna/SAindex",
      params: dir = "index/STAR_vaultrna",
              log = "index/STAR_vaultrna/Log.out",
@@ -148,7 +179,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_vaultrna.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -189,7 +227,7 @@ rule STAR_yrna_ens_index:
+@@ -189,7 +256,7 @@ rule STAR_yrna_ens_index:
      output: SAindex = "index/STAR_yrna_ens/SAindex",
      params: dir = "index/STAR_yrna_ens",
              log = "index/STAR_yrna_ens/Log.out",
@@ -157,7 +188,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_yrna_ens.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -200,7 +238,7 @@ rule STAR_yrna_ucsc_gen_index:
+@@ -200,7 +267,7 @@ rule STAR_yrna_ucsc_gen_index:
      output: SAindex = "index/STAR_yrna_ucsc/SAindex",
      params: dir = "index/STAR_yrna_ucsc",
              log = "index/STAR_yrna_ucsc/Log.out",
@@ -166,7 +197,7 @@ index 2b81af9..9673091 100755
      log:    run = "index/STAR_yrna_ucsc.indexation_run.log",
      threads:    30
      conda:  "wraps/STAR_gen_index/env.yaml"
-@@ -214,7 +252,7 @@ rule alignment_single_genomic:
+@@ -214,7 +281,7 @@ rule alignment_single_genomic:
              bai = "mapped/to_genome/{sample}.to_genome.bam.bai",
      log:    run = "sample_logs/{sample}/alignment.log"
      threads: 20
@@ -175,7 +206,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/to_genome/{sample}/{sample}.",
              read_len = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min(), # Read length from the sequencing. Illumina sometimes reports N+1 http://seqanswers.com/forums/archive/index.php/t-31154.html
              map_perc = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"map_perc_single_genomic"].min(),
-@@ -231,7 +269,7 @@ rule filter_single_genomic:
+@@ -231,7 +298,7 @@ rule filter_single_genomic:
              fastq = "mapped/non_genomic/{sample}.unique.removedGenomic.fastq.gz"
      log:    run = "sample_logs/{sample}/filter_single_genomic.log"
      threads: 20
@@ -184,7 +215,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/genomic/{sample}.",
              prefix_non_genomic = "mapped/non_genomic/{sample}."          
      conda:  "wraps/filter_single_genomic/env.yaml"
-@@ -243,7 +281,7 @@ rule deduplicate_single_genomic:
+@@ -243,7 +310,7 @@ rule deduplicate_single_genomic:
              bed = "mapped/genomic/{sample}.unique_genomic_dedup.without_norm.mapped_reads_norm.bedgraph"
      log:    run = "sample_logs/{sample}/deduplicate_single_genomic.log"
      threads: 20
@@ -193,7 +224,7 @@ index 2b81af9..9673091 100755
      params:
          is_umi = cfg["is_umi"][0],
      conda:  "wraps/deduplicate_single_genomic/env.yaml"
-@@ -256,7 +294,7 @@ rule alignment_mirna:
+@@ -256,7 +323,7 @@ rule alignment_mirna:
      output: bam = "mapped/non_genomic/mirna_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_mirna.log"
      threads: 20
@@ -202,7 +233,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/mirna_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -270,7 +308,7 @@ rule alignment_rrna:
+@@ -270,7 +337,7 @@ rule alignment_rrna:
      output: bam = "mapped/non_genomic/rrna_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_rrna.log"
      threads: 20
@@ -211,7 +242,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/rrna_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -284,7 +322,7 @@ rule alignment_snorna:
+@@ -284,7 +351,7 @@ rule alignment_snorna:
      output: bam = "mapped/non_genomic/snorna_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_snorna.log"
      threads: 20
@@ -220,7 +251,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/snorna_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -298,7 +336,7 @@ rule alignment_trna_ens:
+@@ -298,7 +365,7 @@ rule alignment_trna_ens:
      output: bam = "mapped/non_genomic/trna_ens_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_trna_ens.log"
      threads: 20
@@ -229,7 +260,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/trna_ens_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -312,7 +350,7 @@ rule alignment_trna_gtrnadb:
+@@ -312,7 +379,7 @@ rule alignment_trna_gtrnadb:
      output: bam = "mapped/non_genomic/trna_gtrnadb_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_trna_gtrnadb.log"
      threads: 20
@@ -238,7 +269,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/trna_gtrnadb_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -326,7 +364,7 @@ rule alignment_trna_ncbi:
+@@ -326,7 +393,7 @@ rule alignment_trna_ncbi:
      output: bam = "mapped/non_genomic/trna_ncbi_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_trna_ncbi.log"
      threads: 20
@@ -247,7 +278,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/trna_ncbi_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -340,7 +378,7 @@ rule alignment_trna_ucsc:
+@@ -340,7 +407,7 @@ rule alignment_trna_ucsc:
      output: bam = "mapped/non_genomic/trna_ucsc_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_trna_ucsc.log"
      threads: 20
@@ -256,7 +287,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/trna_ucsc_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -354,7 +392,7 @@ rule alignment_vaultrna:
+@@ -354,7 +421,7 @@ rule alignment_vaultrna:
      output: bam = "mapped/non_genomic/vaultrna_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_vaultrna.log"
      threads: 20
@@ -265,7 +296,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/vaultrna_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -368,7 +406,7 @@ rule alignment_yrna_ens:
+@@ -368,7 +435,7 @@ rule alignment_yrna_ens:
      output: bam = "mapped/non_genomic/yrna_ens_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_yrna_ens.log"
      threads: 20
@@ -274,7 +305,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/yrna_ens_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -382,7 +420,7 @@ rule alignment_yrna_ucsc:
+@@ -382,7 +449,7 @@ rule alignment_yrna_ucsc:
      output: bam = "mapped/non_genomic/yrna_ucsc_alignment/{sample}.mapped.filtered.sam",
      log:    run = "sample_logs/{sample}/alignment_yrna_ucsc.log"
      threads: 20
@@ -283,7 +314,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/non_genomic/yrna_ucsc_alignment/{sample}.",
              read_len = 100, 
              read_length = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"read_length"].min()
-@@ -407,7 +445,7 @@ rule disambiguate_and_filter:
+@@ -407,7 +474,7 @@ rule disambiguate_and_filter:
              smallrna_whole_bam = "mapped/noncoding_rna_chim/{sample}.out_chim.sam",
      log:    run = "sample_logs/{sample}/disambiguate_and_filter.log"
      threads: 20
@@ -292,7 +323,7 @@ index 2b81af9..9673091 100755
      conda:  "wraps/disambiguate_and_filter/env.yaml"
      script: "wraps/disambiguate_and_filter/script.py"
  
-@@ -418,7 +456,7 @@ rule alignment_softclip:
+@@ -418,7 +485,7 @@ rule alignment_softclip:
      output: bam = "mapped/softclip_genomic_noncoding/{sample}.hyb_candidates.sam",
      log:    run = "sample_logs/{sample}/alignment_softclip.log"
      threads: 20
@@ -301,7 +332,7 @@ index 2b81af9..9673091 100755
      params: prefix = "mapped/softclip_genomic_noncoding/{sample}.",
              map_perc = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"map_perc_softclip"].min(),
      conda:  "wraps/alignment_softclip/env.yaml"
-@@ -429,7 +467,7 @@ rule modify_bedgraph:
+@@ -429,7 +496,7 @@ rule modify_bedgraph:
      output: mod_bed = "mapped/genomic/{sample}.unique_genomic_dedup.without_norm.mapped_reads_norm_modified.bedgraph"
      log:    run = "sample_logs/{sample}/modify_bedgraph.log"
      threads: 20
@@ -310,7 +341,7 @@ index 2b81af9..9673091 100755
      conda:  "wraps/modify_bedgraph/env.yaml"
      script: "wraps/modify_bedgraph/script.py"
  
-@@ -445,7 +483,7 @@ rule get_pairs:
+@@ -445,7 +512,7 @@ rule get_pairs:
      output: hyb_pairs = "hyb_pairs/{sample}.hyb_pairs_deduplicated.tsv"
      log:    run = "sample_logs/{sample}/get_pairs.log"
      threads: 1
@@ -319,7 +350,7 @@ index 2b81af9..9673091 100755
      params: prefix = "hyb_pairs/cofold_pairs/",
              is_umi = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"is_umi"].min(),
      conda:  "wraps/get_pairs/env.yaml"
-@@ -466,7 +504,7 @@ rule filter_and_collapse:
+@@ -466,7 +533,7 @@ rule filter_and_collapse:
              pair_collapsed_ambiguous = "hyb_pairs/{sample}.ambiguous.tsv",          
      log:    run = "sample_logs/{sample}/filter_and_collapse.log"
      threads: 1
@@ -328,7 +359,7 @@ index 2b81af9..9673091 100755
      params: prefix = "hyb_pairs/cofold_pairs_collapsed/",
              is_umi = lambda wildcards: cfg.loc[SAMPLES == wildcards.sample,"is_umi"].min(),
      conda:  "wraps/filter_and_collapse/env.yaml"
-@@ -481,7 +519,7 @@ rule merge_replicates:
+@@ -481,7 +548,7 @@ rule merge_replicates:
      output: merged = "hyb_pairs/Merged.{type}.tsv",        
      log:    run = "sample_logs/Merged_{type}/merge_replicates.log"
      threads: 1
@@ -337,7 +368,7 @@ index 2b81af9..9673091 100755
      params: prefix = "hyb_pairs/cofold_pairs_collapsed_merged_{type}/all_types/",
              is_umi = cfg["is_umi"][0],
              is_ambiguous =  "{type}" 
-@@ -496,10 +534,10 @@ rule unify_length:
+@@ -496,10 +563,10 @@ rule unify_length:
      output: pair_collapsed_unified = "hyb_pairs/{sample}.unified_length_all_types_{type}_high_confidence.tsv",          
      log:    run = "sample_logs/{sample}_{type}/unify_length.log"
      threads: 1
@@ -360,7 +391,7 @@ index caff2ed..34466db 100644
    - samtools 
 +  - python <3.12   # snakemake 7.18 imports distutils, gone in py3.12
 diff --git a/wraps/STAR_gen_index/script.py b/wraps/STAR_gen_index/script.py
-index a9d8b51..e494984 100644
+index a9d8b51..8f9f439 100644
 --- a/wraps/STAR_gen_index/script.py
 +++ b/wraps/STAR_gen_index/script.py
 @@ -9,8 +9,18 @@ from snakemake.shell import shell
@@ -395,8 +426,8 @@ index a9d8b51..e494984 100644
 +# A memory-starved host can export STAR_SA_SPARSE_D=2 to store every 2nd suffix, roughly
 +# halving index RAM (measured on hg38: 16 GB sparse vs an OOM at 27.9 GB dense on a 31 GB
 +# box). But this is NOT free: dense and sparse produce DIFFERENT alignments. Measured on
-+# chr21 with real reads, dense vs sparse differed in 7286 records against a 744-record
-+# run-to-run noise floor (the noise coming from --outMultimapperOrder Random). So sparsity
++# chr21 with real reads, dense vs sparse differed for 6931 reads (4.22%) against a 1224-read
++# (0.75%) run-to-run noise floor from --outMultimapperOrder Random — 5.7x. So sparsity
 +# must stay an explicit opt-in for the host that cannot do better, never a default that
 +# quietly follows the pipeline onto a machine with enough RAM to do it properly.
 +SA_SPARSE_D = os.environ.get("STAR_SA_SPARSE_D", "1")

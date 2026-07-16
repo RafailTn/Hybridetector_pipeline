@@ -20,7 +20,7 @@
 # Reads are single-end here; where a run comes back paired, only R1 is kept, which is
 # where the chimera lives (miRBench did the same for Manakov).
 #
-# Env vars: THREADS (default: nproc), KEEP_SRA=1 to keep the .sra prefetch cache.
+# Env vars: THREADS (default: CPU count), KEEP_SRA=1 to keep the .sra prefetch cache.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_env eclip_dl
@@ -35,7 +35,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 : "${OUT_DIR:?--out is required}"
-THREADS="${THREADS:-$(nproc)}"
+THREADS="${THREADS:-$(n_cpus)}"
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 
@@ -70,7 +70,7 @@ if [ -n "$GSE" ]; then
     cat "$SHEET"
     echo
     echo "Wrote $SHEET. Delete the rows you don't want (inputs carry no chimeras — keep the IPs), then rerun with:"
-    echo "  bash chimeric_eclip/01_download_geo.sh --samplesheet $SHEET --out $OUT_DIR"
+    echo "  bash $0 --samplesheet $SHEET --out $OUT_DIR"
     exit 0
 fi
 
@@ -114,4 +114,4 @@ echo
 echo "Done. FASTQs in $OUT_DIR:"
 ls -la "$OUT_DIR"/*.fastq.gz
 echo
-echo "Next: bash chimeric_eclip/02_preprocess_fastq.sh $OUT_DIR <pp dir>"
+echo "Next: bash $(dirname "$0")/02_preprocess_fastq.sh $OUT_DIR <pp dir>"

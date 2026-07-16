@@ -14,4 +14,4 @@ MIRNA_FA="${MIRNA_FA:-$HD_DIR/DBs/mirna/hsa_mature.fa}"
 
 [ -s "$MIRNA_FA" ] || { echo "mature miRNA fasta not found: $MIRNA_FA (run setup.sh)" >&2; exit 1; }
 
-mm_run eclip_pp python "$REPO_ROOT/chimeric_eclip/check_read_state.py" "$FASTQ" "$MIRNA_FA" "$N"
+mm_run eclip_pp python "$PIPELINE_DIR/check_read_state.py" "$FASTQ" "$MIRNA_FA" "$N"

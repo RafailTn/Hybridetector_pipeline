@@ -275,13 +275,18 @@ A dense hg38 STAR index needs ~32 GB resident, both to build and to load for eac
 `packing SA` (kernel memcg log). The only way to run there is a sparse suffix array
 (`--genomeSAsparseD 2`), which roughly halves index RAM.
 
-**Sparse indexing is not alignment-neutral.** Measured on chr21 with real reads and HybriDetector's
-own parameters, with a control:
+**Sparse indexing is not alignment-neutral.** Measured on chr21 with 164,171 real chr21-mapping
+reads and HybriDetector's own parameters, counting the distinct **reads** whose placement changes
+(name, flag, chrom, pos, CIGAR, NH), with a dense-vs-dense control for the RNG noise floor:
 
-| comparison | differing records |
+| comparison | differing reads |
 | --- | --- |
-| dense vs dense (same index, run twice) | 744 — the noise floor, from `--outMultimapperOrder Random` |
-| dense vs **sparse** | **7286** — ten times the noise floor |
+| dense vs dense (same index, run twice) | 1,224 (0.75%) — the noise floor, from `--outMultimapperOrder Random` |
+| dense vs **sparse** | **6,931 (4.22%) — 5.7× the noise floor** |
+
+(Per read, not per SAM record: a multimapper whose alignment changes emits several differing
+records, so a naive record diff over-counts by 3–4×; `validate_sparse_index.sh` collapses to
+distinct reads.)
 
 **miRBench built Manakov's index dense.** A sparse run therefore does not produce mapping-comparable
 output. **This dataset was built with a dense index**, on a machine with sufficient RAM, and is

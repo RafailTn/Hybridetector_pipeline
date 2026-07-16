@@ -34,7 +34,7 @@ done
 echo "== waiting for the main STAR genome index to finish"
 prev=""
 while :; do
-    sz=$(stat -c %s "$HD_DIR/index/STAR/SAindex" 2>/dev/null || echo 0)
+    sz=$(file_size "$HD_DIR/index/STAR/SAindex")
     # done when SAindex exists and has stopped growing
     [ "$sz" != "0" ] && [ "$sz" = "$prev" ] && break
     prev="$sz"
@@ -122,20 +122,28 @@ for D in 1 2; do
 done
 
 n1=$(wc -l < cmp_D1.tsv); n2=$(wc -l < cmp_D2.tsv)
-diffs=$(comm -3 cmp_D1.tsv cmp_D2.tsv | wc -l)
+# comm -3 emits lines unique to EACH file, so a read whose placement changes contributes a
+# line to both sides (a multimapper whose N changes, several). Counting those lines would
+# double-count the change. The honest unit is the DISTINCT READ (query name) that differs:
+# collapse the symmetric difference to unique names. The record-level breakdown is kept for
+# transparency ($1 is the read name in comm's col-1 and tab-indented col-2 lines alike).
+only_dense=$(comm -23 cmp_D1.tsv cmp_D2.tsv | wc -l)
+only_sparse=$(comm -13 cmp_D1.tsv cmp_D2.tsv | wc -l)
+reads_diff=$(comm -3 cmp_D1.tsv cmp_D2.tsv | awk '{print $1}' | sort -u | wc -l)
+reads_tot=$(awk '{print $1}' cmp_D1.tsv | sort -u | wc -l)
 echo
-echo "alignment records: dense=$n1  sparse=$n2"
-echo "records differing between dense and sparse: $diffs"
-if [ "$diffs" -eq 0 ]; then
+echo "alignment records: dense=$n1  sparse=$n2  (only-dense=$only_dense, only-sparse=$only_sparse)"
+echo "reads whose alignment differs: $reads_diff of $reads_tot compared"
+if [ "$reads_diff" -eq 0 ]; then
     echo
     echo "VERDICT: IDENTICAL. --genomeSAsparseD 2 is purely a RAM/speed tradeoff here;"
     echo "         mapping is unaffected, so the sparse index does not make this dataset"
     echo "         incomparable to Manakov."
 else
-    pct=$(python3 -c "print(f'{100*$diffs/max($n1,1):.4f}')")
+    pct=$(python3 -c "print(f'{100*$reads_diff/max($reads_tot,1):.4f}')")
     echo
-    echo "VERDICT: DIFFERS in $diffs records ($pct% of dense). The sparse index is NOT"
-    echo "         alignment-neutral for this STAR version. Examples:"
+    echo "VERDICT: DIFFERS for $reads_diff reads ($pct% of reads compared). The sparse index"
+    echo "         is NOT alignment-neutral for this STAR version. Examples:"
     comm -3 cmp_D1.tsv cmp_D2.tsv | head -10
 fi
 echo "====================================================="

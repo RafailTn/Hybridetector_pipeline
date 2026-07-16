@@ -15,11 +15,11 @@
 # MEMORY IS THE BINDING CONSTRAINT, and it decides something scientific, not just how
 # fast this goes. A dense hg38 STAR index needs ~32 GB resident to build and to align
 # against. Below that you must fall back to a sparse suffix array (--genomeSAsparseD 2),
-# which halves the RAM — but it is NOT alignment-neutral: on a chr21 control, dense-vs-
-# dense differed in 744 records (RNG from --outMultimapperOrder Random) while dense-vs-
-# sparse differed in 7286. So sparse is a hardware concession that perturbs the mapping,
-# not a free win, and a sparse-built dataset is not strictly comparable to miRBench's
-# Manakov v7 (built dense).
+# which halves the RAM — but it is NOT alignment-neutral: on a chr21 control (164k real
+# chr21 reads), dense-vs-dense differs for 1224 reads (0.75%, the RNG noise floor from
+# --outMultimapperOrder Random) while dense-vs-sparse differs for 6931 (4.22%, 5.7x the
+# floor). So sparse is a hardware concession that perturbs the mapping, not a free win, and
+# a sparse-built dataset is not strictly comparable to miRBench's Manakov v7 (built dense).
 #
 # This script therefore SIZES ITSELF to the host: >=40 GB of RAM gets the dense index and
 # upstream-ish budgets; anything less gets sparse, because dense would simply be OOM-killed
@@ -36,7 +36,7 @@ require_env hybridetector
 # 2 was rightly skipped (see check_read_state.sh) — stage 1's raw dir directly.
 PP_DIR="${1:?usage: 03_run_hybridetector.sh <fastq dir: stage 2 output, or stage 1 if already trimmed>}"
 
-CORES="${CORES:-$(nproc)}"
+CORES="${CORES:-$(n_cpus)}"
 READ_LENGTH="${READ_LENGTH:-auto}"       # 'auto' = measure it; see below
 IS_UMI="${IS_UMI:-TRUE}"                 # TRUE only if the UMI is in the read header
 
@@ -44,7 +44,7 @@ IS_UMI="${IS_UMI:-TRUE}"                 # TRUE only if the UMI is in the read h
 # Default to 90% of physical RAM: Snakemake's --res mem is a *budget it schedules
 # against*, so claiming all of it would let the workflow commit the whole machine and
 # leave nothing for the OS and the conda/python overhead of the rules themselves.
-TOTAL_GB=$(awk '/^MemTotal:/ {printf "%d", $2/1024/1024}' /proc/meminfo)
+TOTAL_GB=$(mem_total_gb)
 MEM_GB="${MEM_GB:-$(( TOTAL_GB * 9 / 10 ))}"
 [ "$MEM_GB" -ge 8 ] || { echo "Error: MEM_GB=$MEM_GB is too small to run STAR at all." >&2; exit 1; }
 
@@ -70,10 +70,13 @@ if [ "$STAR_SA_SPARSE_D" = "1" ]; then
     echo "== ${TOTAL_GB} GB host -> budget ${MEM_GB} GB, DENSE STAR index (comparable to miRBench's Manakov v7)"
 else
     echo "== ${TOTAL_GB} GB host -> budget ${MEM_GB} GB, SPARSE STAR index (--genomeSAsparseD 2)"
-    echo "   Sparse is a memory concession and it CHANGES THE MAPPING (~10x the dense-vs-dense"
+    echo "   Sparse is a memory concession and it CHANGES THE MAPPING (~5.7x the dense-vs-dense"
     echo "   noise floor on a chr21 control). Fine for a pilot; for a dataset you intend to"
     echo "   compare against Manakov v7, run this on a >=40 GB machine."
 fi
+# The announced mode is a promise about the index on disk: a leftover index of the other
+# sparsity would be reused silently (Snakemake does not track the flag). Enforce the promise.
+check_star_index_sparsity "$STAR_SA_SPARSE_D"
 # Snakemake refuses to schedule a job whose resources exceed the global budget, so this
 # would otherwise surface as a confusing "job needs mem=200, only NN available" abort.
 for v in HD_MEM_INDEX HD_MEM_ALIGN HD_MEM_SMALL; do
@@ -84,10 +87,11 @@ done
 # run inside its own directory, so link the reads into place. Prefer stage 2's *.pp.
 # files; fall back to plain *.fastq.gz for the already-trimmed case.
 mkdir -p "$HD_DIR/data"
-mapfile -t FQS < <(find "$PP_DIR" -name "*.pp.fastq.gz" | sort)
+FQS=()
+while IFS= read -r fq; do FQS+=("$fq"); done < <(find "$PP_DIR" -name "*.pp.fastq.gz" | sort)
 SUFFIX=".pp.fastq.gz"
 if [ "${#FQS[@]}" -eq 0 ]; then
-    mapfile -t FQS < <(find "$PP_DIR" -maxdepth 1 -name "*.fastq.gz" | sort)
+    while IFS= read -r fq; do FQS+=("$fq"); done < <(find "$PP_DIR" -maxdepth 1 -name "*.fastq.gz" | sort)
     SUFFIX=".fastq.gz"
     [ "${#FQS[@]}" -gt 0 ] && echo "== no stage-2 output here; using raw *.fastq.gz (already-trimmed reads)"
 fi
@@ -100,7 +104,7 @@ fi
 SAMPLES=()
 for fq in "${FQS[@]}"; do
     sample="$(basename "$fq" "$SUFFIX")"
-    ln -sfn "$(readlink -f "$fq")" "$HD_DIR/data/$sample.fastq.gz"
+    ln -sfn "$(abspath "$fq")" "$HD_DIR/data/$sample.fastq.gz"
     SAMPLES+=("$sample")
 done
 echo "== ${#SAMPLES[@]} sample(s): ${SAMPLES[*]}"

@@ -24,6 +24,7 @@ dependencies:
   - python-levenshtein
   - pandas
   - numpy
+  - polars          # positive_overlap.py (novelty audit)
   - matplotlib-base
 
   # CLI / utilities for genomic_region_annotator

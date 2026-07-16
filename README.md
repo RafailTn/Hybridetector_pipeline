@@ -1,7 +1,7 @@
 # Building miRBench-style datasets from a new chimeric eCLIP experiment
 
-This turns raw chimeric-eCLIP/CLASH/CLEAR-CLIP reads into a labelled v7 TSV with the
-same 18 columns as `data/AGO2_eCLIP_Manakov2022_train_v7.tsv`.
+This turns raw chimeric-eCLIP/CLASH/CLEAR-CLIP reads into a labelled v7 TSV — the same
+18-column `v7` schema the miRBench datasets use (listed [below](#the-four-stages)).
 
 It is a thin local driver over two upstream repos, cloned into `external/` (gitignored):
 
@@ -14,6 +14,28 @@ The papers: [HybriDetector / Hejret 2023](https://doi.org/10.1038/s41598-023-497
 and [miRBench / Sammut, Gresova et al., *Bioinformatics* 2025](https://academic.oup.com/bioinformatics/article/41/Supplement_1/i542/8199406).
 The `fix_clustering` branch is the one the miRBench paper used, not `main`.
 
+## Where it lives — a subfolder of a larger repo, or a flat clone of its own
+
+The scripts locate their working root from their own path, so this pipeline runs **both**
+as a subfolder of a larger repo and cloned on its own:
+
+- **As a subfolder of a larger repo** (in a `chimeric_eclip/` directory) the root is the
+  *parent* — so `external/` (the upstream clones) and `data/` (the conservation bigwigs and
+  the dataset outputs) are the parent-level directories, **shared** with the rest of that repo.
+- **Cloned flat** — the scripts at a repo's top level, no `chimeric_eclip/` subfolder — the
+  scripts' own directory is the root, so the clone is self-contained: `external/` and `data/`
+  live inside it, and nothing outside is needed.
+
+So the commands below are written for the subfolder layout (`bash chimeric_eclip/setup.sh`, …).
+**In a flat clone, drop the `chimeric_eclip/` prefix** — `bash setup.sh`,
+`bash 01_download_geo.sh …`, and so on. The scripts' own "next step" hints already print the
+right path for however you invoked them.
+
+Set `REPO_ROOT=/path` to force the root explicitly. The one layout that misfires is cloning
+the *flat* repo into a directory named exactly `chimeric_eclip`: the scripts then assume the
+subfolder layout and reach one level up for `external/`/`data/`. Name the clone
+anything else, or pass `REPO_ROOT`.
+
 ## Setup (once)
 
 ```bash
@@ -21,10 +43,9 @@ bash chimeric_eclip/setup.sh --prebuild-hd-envs
 ```
 
 Clones both repos, applies `patches/hybridetector-fixes.patch`, and builds four
-micromamba environments. **This deliberately does not use pixi.** HybriDetector is a
-Snakemake workflow where each rule builds its own conda env at runtime
-(`--use-conda`), which needs a real conda/mamba solver; the pixi env in
-`dependencies/` is for the CNN and is untouched by any of this.
+micromamba environments. HybriDetector is a Snakemake workflow where each rule builds its
+own conda env at runtime (`--use-conda`), which needs a real conda/mamba solver — hence
+micromamba rather than a single pinned environment.
 
 | Env | Used by | Contents |
 | --- | --- | --- |
@@ -32,6 +53,13 @@ Snakemake workflow where each rule builds its own conda env at runtime
 | `eclip_pp` | stage 2 | umi_tools, cutadapt |
 | `hybridetector` | stage 3 | snakemake 7.18.2 + mamba (the 13 per-rule envs — STAR, R/Bioconductor, ViennaRNA — are built on top) |
 | `mirbench_pp` | stage 4 | pandas, pyBigWig, pyranges, DECIPHER, genomic_region_annotator |
+
+> **Updating an existing clone.** `setup.sh` applies `hybridetector-fixes.patch` only to a
+> *clean* HybriDetector checkout — it detects an already-patched (dirty) working tree and
+> skips, so it will **not** carry a later patch revision onto a clone you set up earlier.
+> When the patch changes (e.g. the `onstart` sparsity guard was added to it), refresh the
+> clone yourself: `git -C external/HybriDetector stash` (or `checkout .`) then re-run
+> `setup.sh`, or just delete `external/HybriDetector` and let `setup.sh` re-clone it.
 
 ## The four stages
 
@@ -102,9 +130,8 @@ How much does the missing deduplication actually cost? Less than it sounds:
 
 - `Nunique` is a **pure passthrough**. It is never used in any filter, threshold, cluster,
   split, or negative-sampling decision — it is copied through and zeroed for negatives.
-  (In `AGO2_eCLIP_Manakov2022_train_v7.tsv` *every* negative has `Nunique = 0` and every
-  positive has `Nunique > 0`: it is a perfect label leak, not a feature. The CNN is
-  sequence-only and never sees it.)
+  (In the Manakov training set *every* negative has `Nunique = 0` and every positive has
+  `Nunique > 0`: it is a perfect label leak, not a feature — don't train on it.)
 - HybriDetector's filters select on alignment length, alignment quality, RepeatMasker
   overlap and base composition — **no read-count thresholds**; "high confidence" means a
   mismatch-free miRNA alignment, not depth.
@@ -123,13 +150,8 @@ read_start_in_sel_tx_1based  read_end_in_sel_tx_1based  gene_cluster_ID
 gene_phyloP  gene_phastCons
 ```
 
-so they go straight into training:
-
-```bash
-TRAIN=data/myset/step6_add_conservation/<...>.train.<...>.conservation.tsv \
-TESTS=data/myset/step6_add_conservation/<...>.test.<...>.conservation.tsv \
-bash cnn/run_train.sh kfold
-```
+The `*.train.*.conservation.tsv` and `*.test.*.conservation.tsv` files are the finished
+product — a labelled, train/test-split dataset ready to hand to whatever model you train.
 
 ## How much of a new series is actually new?
 
@@ -138,7 +160,7 @@ re-observations of interactions the existing datasets already contain (Manakov a
 ~1.4M positives). `positive_overlap.py` answers that:
 
 ```bash
-dependencies/.pixi/envs/default/bin/python chimeric_eclip/positive_overlap.py \
+micromamba run -n mirbench_pp python chimeric_eclip/positive_overlap.py \
     --input data/myset/step6_add_conservation/*.conservation.tsv \
     --merged-out data/myset_positives_merged_v7.tsv \
     --novel-out  data/myset_positives_novel_v7.tsv
@@ -181,20 +203,36 @@ OOM-killed at 27.9 GB resident during the `packing SA` step (kernel memcg log), 
 (`STAR_SA_SPARSE_D=2`), which halves index RAM — 16 GB instead of an OOM.
 
 **Sparse is not free, and I measured it.** Dense and sparse produce *different*
-alignments. On chr21, with real reads and HybriDetector's own alignment parameters:
+alignments. On chr21, with 164,171 real chr21-mapping reads and HybriDetector's own
+alignment parameters, counting the distinct **reads** whose placement changes (name, flag,
+chrom, pos, CIGAR, NH):
 
-| comparison | differing records |
+| comparison | differing reads |
 | --- | --- |
-| dense vs dense (same index, twice) | 744 — the noise floor, from `--outMultimapperOrder Random` |
-| dense vs **sparse** | **7286** — ten times the noise floor |
+| dense vs dense (same index, twice) | 1,224 (0.75%) — the noise floor, from `--outMultimapperOrder Random` |
+| dense vs **sparse** | **6,931 (4.22%) — 5.7× the noise floor** |
 
-So the difference is real, not run-to-run jitter. (The magnitude in a whole-genome regime
-is *not* established: chr21 is 1.5% of the genome, so only ~500 reads were confidently and
-uniquely placed, of which the two agreed on 98%. That is enough to refute neutrality, not
-to size it. `chimeric_eclip/validate_sparse_index.sh` reruns this check.)
+So the difference is real, not run-to-run jitter. (The count is per *read*, not per SAM
+record: a multimapper whose alignment changes emits several differing records, so a naive
+record diff over-counts by 3–4× here — `validate_sparse_index.sh` collapses to distinct
+reads. The within-chr21 estimate is well-sampled, but chr21 is ~1.5% of the genome, so
+the exact genome-wide magnitude is not established — enough to refute neutrality, not
+to pin the number.)
 
 Consequence: **miRBench built Manakov's index dense.** A sparse local run is therefore
 *not* mapping-identical to Manakov. If that matters for your comparison, use the cluster.
+
+**The dense/sparse choice is not a tracked Snakemake input.** `STAR_gen_index` reads the
+sparsity from the environment, but the rule declares only the genome FASTA as input — so if
+an `index/STAR/` already exists, Snakemake reuses it *whatever sparsity you now ask for*,
+and the run's `DENSE`/`SPARSE` banner would then describe the request, not the bytes on disk
+(the trap: a leftover sparse index reused under a `DENSE` claim, silently not comparable to
+Manakov). This is guarded in two places, both of which read the `genomeSAsparseD` STAR
+recorded in `index/STAR/genomeParameters.txt` and **abort** on a mismatch, telling you to
+`rm -rf .../index/STAR` to rebuild or to set `STAR_SA_SPARSE_D` to match the existing index:
+`03_run_hybridetector*.sh` check before launching, and — since Snakemake itself won't catch
+it — the patched Snakefile carries an `onstart` handler (`hybridetector-fixes.patch`) that
+raises the identical error, so calling `snakemake` on HybriDetector directly is guarded too.
 
 The Snakefile and STAR wrapper now **default to upstream** — dense index, `mem` 200/50/34 —
 so nothing about this laptop follows the pipeline anywhere else. `03_run_hybridetector.sh`
@@ -242,15 +280,14 @@ The `.snakemake/conda` envs add ~4 GB.
 (`seq.g`, `noncodingRNA_seq`, `chr.g`, `Nunique`). There is a sibling
 `*_high_confidence_finalout.tsv` holding the same rows under the prettier column names
 documented in HybriDetector's README (`Genomic fragment sequence`, …); miRBench's
-`filtering.py` does not understand those. `data/AGO2_eCLIP_Manakov2022_full_dataset.tsv`
-is an example of the correct format.
+`filtering.py` does not understand those, so stage 4 always reads the raw-column file.
 
 **How the labels are made** (stage 4, step 3) is the substance of the miRBench paper.
 Negatives are not random miRNA–site shuffles: for each positive, a binding site is
 sampled from a *different gene cluster*, and each miRNA family keeps the same share of
 the negative class as it has of the positive class. That is what removes the miRNA
 frequency-class bias — without it a model scores well by learning which miRNAs are
-merely common. Consequence you already know from `data/`: a positive and its negative
+merely common. A consequence worth knowing: a positive and its negative
 twin share a target site, so any feature that is a property of the site alone (mapped
 coordinates, target conservation, accessibility) is constant within a twin pair and
 cannot separate them.

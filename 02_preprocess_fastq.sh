@@ -39,7 +39,7 @@ OUT_DIR="${2:?usage: 02_preprocess_fastq.sh <raw fastq dir> <output dir>}"
 UMI_PATTERN="${UMI_PATTERN:-NNNNNNNNNN}"   # 10 nt 5' UMI
 UMI3_LEN="${UMI3_LEN:-10}"                 # 10 nt 3' UMI remnant
 MIN_LEN="${MIN_LEN:-18}"
-THREADS="${THREADS:-$(nproc)}"
+THREADS="${THREADS:-$(n_cpus)}"
 
 # Every 10-mer suffix of the Illumina 3' adapter, as upstream. Reads are short and the
 # adapter is often only partially present, so cutadapt is given all the offsets.

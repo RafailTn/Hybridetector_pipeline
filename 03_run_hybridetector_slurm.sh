@@ -15,8 +15,8 @@
 #
 # WHY THIS MATTERS: a dense hg38 index needs ~30 GB resident to build AND to align
 # against. On the 31 GB laptop it was OOM-killed at 27.9 GB, so sparse was the only
-# option there — and sparse is NOT alignment-neutral (7286 differing records vs a
-# 744-record noise floor on chr21). On a cluster there is no reason to accept that,
+# option there — and sparse is NOT alignment-neutral (6931 differing reads, 5.7x the
+# 1224-read dense-vs-dense noise floor on a chr21 control). On a cluster no reason to accept that,
 # so this script deliberately does not export STAR_SA_SPARSE_D.
 #
 # BEFORE FIRST RUN, edit chimeric_eclip/slurm/config.yaml:
@@ -29,7 +29,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_env hybridetector
 
 PP_DIR="${1:?usage: 03_run_hybridetector_slurm.sh <fastq dir>}"
-PROFILE="${PROFILE:-$REPO_ROOT/chimeric_eclip/slurm}"
+PROFILE="${PROFILE:-$PIPELINE_DIR/slurm}"
 JOBS="${JOBS:-20}"
 READ_LENGTH="${READ_LENGTH:-auto}"
 IS_UMI="${IS_UMI:-TRUE}"
@@ -40,12 +40,16 @@ grep -q "partition=compute" "$PROFILE/config.yaml" && \
     echo "WARNING: $PROFILE/config.yaml still says partition=compute — set your real partition." >&2
 
 # Deliberately NOT set: STAR_SA_SPARSE_D, HD_MEM_*. Upstream defaults = dense + 200/50/34.
+# This runner is the DENSE one, so refuse to silently reuse a leftover SPARSE genome index
+# (e.g. one built earlier on a small local box) — Snakemake would not rebuild it on its own.
+check_star_index_sparsity 1
 
 mkdir -p "$HD_DIR/data" "$HD_DIR/slurm_logs"
-mapfile -t FQS < <(find "$PP_DIR" -name "*.pp.fastq.gz" | sort)
+FQS=()
+while IFS= read -r fq; do FQS+=("$fq"); done < <(find "$PP_DIR" -name "*.pp.fastq.gz" | sort)
 SUFFIX=".pp.fastq.gz"
 if [ "${#FQS[@]}" -eq 0 ]; then
-    mapfile -t FQS < <(find "$PP_DIR" -maxdepth 1 -name "*.fastq.gz" | sort)
+    while IFS= read -r fq; do FQS+=("$fq"); done < <(find "$PP_DIR" -maxdepth 1 -name "*.fastq.gz" | sort)
     SUFFIX=".fastq.gz"
 fi
 [ "${#FQS[@]}" -gt 0 ] || { echo "Error: no fastq found under $PP_DIR" >&2; exit 1; }
@@ -53,7 +57,7 @@ fi
 SAMPLES=()
 for fq in "${FQS[@]}"; do
     sample="$(basename "$fq" "$SUFFIX")"
-    ln -sfn "$(readlink -f "$fq")" "$HD_DIR/data/$sample.fastq.gz"
+    ln -sfn "$(abspath "$fq")" "$HD_DIR/data/$sample.fastq.gz"
     SAMPLES+=("$sample")
 done
 echo "== ${#SAMPLES[@]} sample(s): ${SAMPLES[*]}"

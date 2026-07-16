@@ -3,6 +3,19 @@
 #
 #   bash chimeric_eclip/04_make_dataset.sh external/HybriDetector/hyb_pairs data/newset
 #
+# WHICH SAMPLES GO IN: HybriDetector hardwires all of its per-sample hybrid tables into
+# one shared external/HybriDetector/hyb_pairs/ directory, which ACCUMULATES across every
+# stage-3 run you ever do. Globbing the whole directory would therefore silently fuse
+# unrelated experiments/fractions (e.g. GSE297116 cytoplasm + chromatin + Manakov) into a
+# single dataset. So pass one or more sample-name globs to pick exactly the samples for
+# THIS dataset — matched against the filename prefix, i.e. the stage-3 <sample> name:
+#
+#   bash chimeric_eclip/04_make_dataset.sh external/HybriDetector/hyb_pairs \
+#        data/cytoplasm 'HCT116_cytoplasm_*'
+#
+# With no globs it takes every table in the directory (back-compatible, and correct when
+# hyb_pairs holds a single experiment) — but it lists them so a stray fraction is obvious.
+#
 # Runs miRBench's 7-step post-processing (their run_postprocess_pipeline.sh, single
 # mode) after concatenating the per-sample hybrid tables:
 #
@@ -29,9 +42,15 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_env mirbench_pp
 
-HYB_DIR="${1:?usage: 04_make_dataset.sh <HybriDetector hyb_pairs dir> <output dir>}"
-OUT_DIR="${2:?usage: 04_make_dataset.sh <HybriDetector hyb_pairs dir> <output dir>}"
+HYB_DIR="${1:?usage: 04_make_dataset.sh <HybriDetector hyb_pairs dir> <output dir> [sample-glob ...]}"
+OUT_DIR="${2:?usage: 04_make_dataset.sh <HybriDetector hyb_pairs dir> <output dir> [sample-glob ...]}"
+shift 2
+# Remaining args = sample-name globs selecting which hybrid tables to include; none = all.
+PATTERNS=("$@")
+[ "${#PATTERNS[@]}" -gt 0 ] || PATTERNS=("*")
 NAME="${NAME:-$(basename "$OUT_DIR")}"
+
+HYB_SUFFIX="unified_length_all_types_unique_high_confidence.tsv"
 
 for bw in "$PHYLOP_BW" "$PHASTCONS_BW"; do
     if [ ! -s "$bw" ]; then
@@ -46,12 +65,32 @@ mkdir -p "$OUT_DIR/input"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 CONCAT="$OUT_DIR/input/$NAME.tsv"
 
+# Resolve the selected sample globs to a deduplicated list of hybrid tables. Each glob is
+# matched against "<sample>.<suffix>", so 'HCT116_cytoplasm_*' picks only that fraction and
+# never a chromatin/whole-cell table sitting in the same shared directory.
+FILES=()
+for pat in "${PATTERNS[@]}"; do
+    for f in "$HYB_DIR"/$pat.$HYB_SUFFIX; do
+        [ -e "$f" ] || continue
+        case " ${FILES[*]} " in *" $f "*) continue ;; esac   # dedupe overlapping globs
+        FILES+=("$f")
+    done
+done
+if [ "${#FILES[@]}" -eq 0 ]; then
+    echo "Error: no hybrid tables in $HYB_DIR match: ${PATTERNS[*]}" >&2
+    echo "  available samples:" >&2
+    for f in "$HYB_DIR"/*."$HYB_SUFFIX"; do
+        [ -e "$f" ] && echo "    $(basename "$f" ".$HYB_SUFFIX")" >&2
+    done
+    exit 1
+fi
+
 # Concatenate the per-sample hybrid tables, keeping only the first header. (Upstream's
 # concat_HD_output.sh does exactly this; inlined to avoid its SLURM preamble.)
 if [ ! -s "$CONCAT" ]; then
-    echo "== concatenating hybrid tables from $HYB_DIR"
+    echo "== concatenating ${#FILES[@]} hybrid table(s) from $HYB_DIR"
     first=1
-    for f in "$HYB_DIR"/*unified_length_all_types_unique_high_confidence.tsv; do
+    for f in "${FILES[@]}"; do
         echo "   + $(basename "$f")"
         if [ "$first" = 1 ]; then cat "$f" > "$CONCAT"; first=0
         else tail -n +2 "$f" >> "$CONCAT"; fi
