@@ -17,7 +17,7 @@ index 2b81af9..24352f2 100755
  
 +# Per-rule memory budgets. The DEFAULTS BELOW ARE UPSTREAM'S — a cluster gets stock
 +# HybriDetector and a dense STAR index, unchanged. Only a memory-starved host opts out,
-+# by exporting these (see chimeric_eclip/03_run_hybridetector.sh, which sets 28/24/24 to
++# by exporting these (see 03_run_hybridetector.sh, which sets 28/24/24 to
 +# fit 31 GB, together with STAR_SA_SPARSE_D=2).
 +#
 +# Do not fold the low-memory values back in as defaults: a sparse suffix array is NOT
@@ -34,7 +34,7 @@ index 2b81af9..24352f2 100755
 +# were the requested mode (the trap: a leftover sparse index under a dense request, silently
 +# not comparable to Manakov). STAR records what it actually used in genomeParameters.txt;
 +# refuse to run on a mismatch. Living in the Snakefile, this protects direct `snakemake`
-+# calls too, not only chimeric_eclip/03_run_hybridetector*.sh.
++# calls too, not only 03_run_hybridetector*.sh.
 +onstart:
 +    _sa = "index/STAR/SAindex"
 +    _gp = "index/STAR/genomeParameters.txt"
@@ -85,7 +85,7 @@ index 2b81af9..24352f2 100755
 +    # sample at a time and concatenated the per-sample tables afterwards
 +    # (code/concat_HD_output/concat_HD_output.sh globs
 +    # *.unified_length_all_types_unique_high_confidence.tsv), letting post-processing step 0
-+    # dedup the overlap. chimeric_eclip/04_make_dataset.sh does the same concatenation.
++    # dedup the overlap. 04_make_dataset.sh does the same concatenation.
 +    #
 +    # So always take the per-sample path: it is the one that works, and the one that
 +    # reproduces Manakov v7. Set HD_MERGE_REPLICATES=1 to opt back into the upstream
