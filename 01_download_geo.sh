@@ -3,15 +3,15 @@
 #
 # Two modes. First expand a GEO series into a sample sheet:
 #
-#   bash chimeric_eclip/01_download_geo.sh --gse GSE297116 --out data/raw/gse297116
+#   bash 01_download_geo.sh --gse GSE297116 --out data/raw/gse297116
 #
 # which writes <out>/samplesheet.tsv listing every GSM with its title and SRR runs, and
 # stops. Delete the rows you don't want (see the note on inputs below), then:
 #
-#   bash chimeric_eclip/01_download_geo.sh --samplesheet <sheet> --out data/raw/gse297116
+#   bash 01_download_geo.sh --samplesheet <sheet> --out data/raw/gse297116
 #
 # which downloads each run and concatenates the runs of one sample into one FASTQ. A
-# curated sheet is kept in chimeric_eclip/samplesheets/ for each experiment we process.
+# curated sheet is kept in samplesheets/ for each experiment we process.
 #
 # WHICH SAMPLES: only the IP libraries carry chimeras. An eCLIP series also ships
 # size-matched `(input)` controls — no AGO2 pulldown, so no miRNA:target ligations —

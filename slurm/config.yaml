@@ -1,6 +1,6 @@
 # Snakemake 7 SLURM profile for HybriDetector.
 #
-#   snakemake --profile chimeric_eclip/slurm ...
+#   snakemake --profile slurm ...
 #
 # Each rule becomes one sbatch job. The Snakefile's `resources: mem` (in GB) and
 # `threads` are passed straight through, so the STAR genome-index rule asks the

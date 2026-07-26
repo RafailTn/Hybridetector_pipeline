@@ -2,7 +2,7 @@
 # Stage 3 — call chimeras. Runs the HybriDetector Snakemake workflow over the
 # preprocessed FASTQs and produces, per sample, a table of miRNA→target hybrids.
 #
-#   bash chimeric_eclip/03_run_hybridetector.sh data/pp/manakov
+#   bash 03_run_hybridetector.sh data/pp/manakov
 #
 # The output that matters downstream is
 #   external/HybriDetector/hyb_pairs/<sample>.unified_length_all_types_unique_high_confidence.tsv

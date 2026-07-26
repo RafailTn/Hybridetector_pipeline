@@ -1,6 +1,6 @@
 # Construction of a miRBench-style v7 dataset from GSE297116
 
-Methods record for the AGO2 chimeric-eCLIP dataset built with `chimeric_eclip/`. It documents
+Methods record for the AGO2 chimeric-eCLIP dataset built with this pipeline. It documents
 what was run, in what order, with which parameters, and — separately — every point at which the
 pipeline departs from the published upstream tools, with the reason. Written to be reportable:
 each deviation is either a fix for a bug that made upstream fail outright, or a decision forced
@@ -48,7 +48,7 @@ Excluded, and why:
 Run **before** any trimming:
 
 ```bash
-bash chimeric_eclip/check_read_state.sh data/raw/gse297116
+bash check_read_state.sh data/raw/gse297116
 ```
 
 **Finding: GSE297116 reads are already preprocessed.** Adapters are trimmed, and the UMIs have
@@ -107,8 +107,8 @@ with degraded chimera yield. The only symptom is an unexplained low hybrid count
 ## 4. Stage 1 — download
 
 ```bash
-bash chimeric_eclip/01_download_geo.sh \
-     --samplesheet chimeric_eclip/samplesheets/GSE297116_wholecell_wt.tsv \
+bash 01_download_geo.sh \
+     --samplesheet samplesheets/GSE297116_wholecell_wt.tsv \
      --out data/raw/gse297116
 ```
 
@@ -123,7 +123,7 @@ It was not run here, because the submitter had already done it.
 ## 6. Stage 3 — chimera calling (HybriDetector)
 
 ```bash
-IS_UMI=FALSE bash chimeric_eclip/03_run_hybridetector.sh data/raw/gse297116
+IS_UMI=FALSE bash 03_run_hybridetector.sh data/raw/gse297116
 ```
 
 Parameters (as written to `external/HybriDetector/config.json`):
@@ -158,7 +158,7 @@ input.
 ## 7. Stage 4 — labelling (miRBench post-processing)
 
 ```bash
-bash chimeric_eclip/04_make_dataset.sh data/hyb_gse297116 data/gse297116
+bash 04_make_dataset.sh data/hyb_gse297116 data/gse297116
 ```
 
 The two per-sample hybrid tables are concatenated (one header retained), then miRBench's seven-step
@@ -197,7 +197,7 @@ not run at all without them. **F–H are decisions** forced by properties of thi
 
 ### Upstream bugs fixed (HybriDetector)
 
-Patch: `chimeric_eclip/patches/hybridetector-fixes.patch`.
+Patch: `patches/hybridetector-fixes.patch`.
 
 **A. `merge_replicates` is bypassed; multi-sample runs take the per-sample path.**
 The Snakefile has declared this rule's output as `hyb_pairs/Merged.{type}.tsv` since commit
@@ -242,7 +242,7 @@ Also: `prepare_ref` fetched Ensembl over **FTP**, which many networks block. Cha
 
 ### Upstream bugs fixed (miRBench)
 
-Patch: `chimeric_eclip/patches/mirbench-nunique-na.patch`.
+Patch: `patches/mirbench-nunique-na.patch`.
 
 **F. `Nunique` written as `NA` when the library has no UMIs.**
 With `is_umi=FALSE`, HybriDetector emits no `Nunique` column and miRBench's `filtering.py` crashes

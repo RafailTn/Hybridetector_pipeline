@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Are these reads raw, or did the submitter already trim them? Run BEFORE stage 2.
 #
-#   bash chimeric_eclip/check_read_state.sh data/raw/gse297116/HCT116_wholecell_rep1_IP.fastq.gz
+#   bash check_read_state.sh data/raw/gse297116/HCT116_wholecell_rep1_IP.fastq.gz
 #
 # See check_read_state.py for what it measures and why the GEO metadata is not enough.
 set -euo pipefail

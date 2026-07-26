@@ -2,12 +2,12 @@
 # One-time setup: clone the two upstream repos, apply the upstream bug fixes,
 # and build the four micromamba envs. Idempotent — safe to re-run.
 #
-#   bash chimeric_eclip/setup.sh
+#   bash setup.sh
 #
 # Afterwards, prebuild HybriDetector's 15 per-rule conda envs (optional, ~4 GB, but it
 # gets all the solving out of the way before you start a multi-hour run):
 #
-#   bash chimeric_eclip/setup.sh --prebuild-hd-envs
+#   bash setup.sh --prebuild-hd-envs
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 ENVS_DIR="$PIPELINE_DIR/envs"
@@ -47,7 +47,7 @@ fi
 # python<3.12 pin (snakemake 7 imports distutils), jq for the bsgenome post-link, the
 # gzipped-genome length bug in STAR_gen_index, and FTP->HTTPS for Ensembl. It also makes
 # the memory budgets and STAR sparsity env-switchable, with UPSTREAM values as defaults.
-# See chimeric_eclip/patches/hybridetector-fixes.patch and the README.
+# See patches/hybridetector-fixes.patch and the README.
 if git -C "$HD_DIR" diff --quiet; then
     echo "== applying hybridetector-fixes.patch"
     git -C "$HD_DIR" apply "$PIPELINE_DIR/patches/hybridetector-fixes.patch"

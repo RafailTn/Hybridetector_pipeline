@@ -14,32 +14,23 @@ The papers: [HybriDetector / Hejret 2023](https://doi.org/10.1038/s41598-023-497
 and [miRBench / Sammut, Gresova et al., *Bioinformatics* 2025](https://academic.oup.com/bioinformatics/article/41/Supplement_1/i542/8199406).
 The `fix_clustering` branch is the one the miRBench paper used, not `main`.
 
-## Where it lives — a subfolder of a larger repo, or a flat clone of its own
+## Where it lives
 
-The scripts locate their working root from their own path, so this pipeline runs **both**
-as a subfolder of a larger repo and cloned on its own:
+The clone is self-contained. The scripts take their working root from their own directory,
+so `external/` (the upstream clones) and `data/` (the conservation bigwigs and the dataset
+outputs) live inside the clone, and nothing outside it is ever referenced — whatever the
+clone is named, and wherever it sits. Run everything from the repo root; the commands below
+assume that.
 
-- **As a subfolder of a larger repo** (in a `chimeric_eclip/` directory) the root is the
-  *parent* — so `external/` (the upstream clones) and `data/` (the conservation bigwigs and
-  the dataset outputs) are the parent-level directories, **shared** with the rest of that repo.
-- **Cloned flat** — the scripts at a repo's top level, no `chimeric_eclip/` subfolder — the
-  scripts' own directory is the root, so the clone is self-contained: `external/` and `data/`
-  live inside it, and nothing outside is needed.
-
-So the commands below are written for the subfolder layout (`bash chimeric_eclip/setup.sh`, …).
-**In a flat clone, drop the `chimeric_eclip/` prefix** — `bash setup.sh`,
-`bash 01_download_geo.sh …`, and so on. The scripts' own "next step" hints already print the
-right path for however you invoked them.
-
-Set `REPO_ROOT=/path` to force the root explicitly. The one layout that misfires is cloning
-the *flat* repo into a directory named exactly `chimeric_eclip`: the scripts then assume the
-subfolder layout and reach one level up for `external/`/`data/`. Name the clone
-anything else, or pass `REPO_ROOT`.
+Set `REPO_ROOT=/path` to put `external/` and `data/` somewhere else, which is worth doing
+when the conservation bigwigs (~16 GB) or the upstream clones already exist on disk and you
+don't want a second copy. `EXTERNAL`, `HD_DIR`, `MIRBENCH_DIR`, `PHYLOP_BW` and
+`PHASTCONS_BW` can each be overridden individually too.
 
 ## Setup (once)
 
 ```bash
-bash chimeric_eclip/setup.sh --prebuild-hd-envs
+bash setup.sh --prebuild-hd-envs
 ```
 
 Clones both repos, applies `patches/hybridetector-fixes.patch`, and builds four
@@ -66,21 +57,21 @@ micromamba rather than a single pinned environment.
 ```bash
 # 1. raw reads. --gse writes an editable sample sheet; --samplesheet downloads it.
 #    Only IP libraries carry chimeras — drop the (input) controls.
-bash chimeric_eclip/01_download_geo.sh --gse GSE297116 --out data/raw/myset
-bash chimeric_eclip/01_download_geo.sh --samplesheet <sheet> --out data/raw/myset
+bash 01_download_geo.sh --gse GSE297116 --out data/raw/myset
+bash 01_download_geo.sh --samplesheet <sheet> --out data/raw/myset
 
 # 1b. ALWAYS DO THIS. Are the reads raw, or did the submitter already trim them?
-bash chimeric_eclip/check_read_state.sh data/raw/myset/<sample>.fastq.gz
+bash check_read_state.sh data/raw/myset/<sample>.fastq.gz
 
 # 2. trim: 5' UMI -> read header, 3' adapter, 3' UMI remnant.
 #    SKIP THIS ENTIRELY if 1b says the reads are already trimmed.
-bash chimeric_eclip/02_preprocess_fastq.sh data/raw/myset data/pp/myset
+bash 02_preprocess_fastq.sh data/raw/myset data/pp/myset
 
 # 3. call chimeras (the long one: hours, and see the memory note below)
-bash chimeric_eclip/03_run_hybridetector.sh data/pp/myset
+bash 03_run_hybridetector.sh data/pp/myset
 
 # 4. hybrids -> labelled v7 dataset
-bash chimeric_eclip/04_make_dataset.sh external/HybriDetector/hyb_pairs data/myset
+bash 04_make_dataset.sh external/HybriDetector/hyb_pairs data/myset
 ```
 
 ## Check the read state before you trim anything
@@ -160,7 +151,7 @@ re-observations of interactions the existing datasets already contain (Manakov a
 ~1.4M positives). `positive_overlap.py` answers that:
 
 ```bash
-micromamba run -n mirbench_pp python chimeric_eclip/positive_overlap.py \
+micromamba run -n mirbench_pp python positive_overlap.py \
     --input data/myset/step6_add_conservation/*.conservation.tsv \
     --merged-out data/myset_positives_merged_v7.tsv \
     --novel-out  data/myset_positives_novel_v7.tsv
@@ -246,9 +237,9 @@ the *same command* is right on the laptop and on a big server; only the machine 
 the RAM and goes dense on its own:
 
 ```bash
-bash chimeric_eclip/setup.sh --prebuild-hd-envs
-bash chimeric_eclip/01_download_geo.sh --samplesheet chimeric_eclip/samplesheets/<sheet>.tsv --out data/raw/myset
-IS_UMI=FALSE bash chimeric_eclip/03_run_hybridetector.sh data/raw/myset
+bash setup.sh --prebuild-hd-envs
+bash 01_download_geo.sh --samplesheet samplesheets/<sheet>.tsv --out data/raw/myset
+IS_UMI=FALSE bash 03_run_hybridetector.sh data/raw/myset
 ```
 
 It will announce `-> budget NNN GB, DENSE STAR index`. Override `MEM_GB` if you are sharing
@@ -257,9 +248,9 @@ the box with someone and shouldn't take 90% of it; override `CORES` (default `np
 **On a SLURM cluster** — use the scheduler runner, which submits one `sbatch` job per rule:
 
 ```bash
-$EDITOR chimeric_eclip/slurm/config.yaml     # partition=compute -> your partition
-bash chimeric_eclip/setup.sh --prebuild-hd-envs
-bash chimeric_eclip/03_run_hybridetector_slurm.sh data/raw/myset
+$EDITOR slurm/config.yaml     # partition=compute -> your partition
+bash setup.sh --prebuild-hd-envs
+bash 03_run_hybridetector_slurm.sh data/raw/myset
 ```
 
 It exports **neither** `STAR_SA_SPARSE_D` nor `HD_MEM_*`, so the workflow runs stock upstream.

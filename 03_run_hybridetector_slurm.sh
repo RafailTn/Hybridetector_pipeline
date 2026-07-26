@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stage 3, on a SLURM cluster — with a DENSE STAR index (upstream defaults).
 #
-#   bash chimeric_eclip/03_run_hybridetector_slurm.sh data/raw/gse297116
+#   bash 03_run_hybridetector_slurm.sh data/raw/gse297116
 #
 # This is the same workflow as 03_run_hybridetector.sh, minus the compromises that
 # 31 GB of RAM forced locally:
@@ -19,7 +19,7 @@
 # 1224-read dense-vs-dense noise floor on a chr21 control). On a cluster no reason to accept that,
 # so this script deliberately does not export STAR_SA_SPARSE_D.
 #
-# BEFORE FIRST RUN, edit chimeric_eclip/slurm/config.yaml:
+# BEFORE FIRST RUN, edit slurm/config.yaml:
 #   - `partition=compute` -> your cluster's partition name
 #   - the per-rule mem/time in `set-resources` if your scheduler is stricter
 #

@@ -2,7 +2,7 @@
 # Stage 2 — trim raw reads into the form HybriDetector requires: adapters and barcodes
 # precisely removed, UMI moved from the sequence into the read header.
 #
-#   bash chimeric_eclip/02_preprocess_fastq.sh data/raw/manakov data/pp/manakov
+#   bash 02_preprocess_fastq.sh data/raw/manakov data/pp/manakov
 #
 # This is a local, non-SLURM rewrite of
 # miRBench_paper/code/preprocess_downloaded_eCLIP_for_HD/preprocess_eCLIP_for_HD.sh,
@@ -28,7 +28,7 @@
 # trimmed — GSE297116 is one: its UMIs were pruned and its adapters cut before upload.
 # Running this stage on such reads is a silent catastrophe: it would strip 10 nt off the
 # 5' end, which is exactly where the miRNA and its seed sit, and nothing would error.
-# `bash chimeric_eclip/check_read_state.sh <fastq.gz>` tells you which case you are in.
+# `bash check_read_state.sh <fastq.gz>` tells you which case you are in.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_env eclip_pp

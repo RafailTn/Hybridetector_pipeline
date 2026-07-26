@@ -9,24 +9,16 @@ MICROMAMBA="${MICROMAMBA:-$HOME/.local/bin/micromamba}"
 export MAMBA_ROOT_PREFIX="${MAMBA_ROOT_PREFIX:-$HOME/micromamba}"
 
 # Where external/ (the HD + miRBench clones) and data/ (bigwigs, dataset outputs) live.
-# In the thesis these scripts sit in <thesis>/chimeric_eclip/ and deliberately SHARE the
-# thesis-root external/ and data/ with the CNN side, so the root is the parent. But when
-# the pipeline is cloned on its own — scripts flat at a repo's top level, no chimeric_eclip
-# subfolder — the parent points ABOVE the clone and everything lands in the wrong place. So
-# only climb to the parent when we really are inside a chimeric_eclip/ subfolder; otherwise
-# the scripts' own directory is the root, and the standalone clone is self-contained.
-# Override REPO_ROOT to force either.
+# This pipeline is standalone: the scripts' own directory IS the working root, so a clone is
+# self-contained and nothing outside it is ever referenced — whatever the clone is named, and
+# wherever it sits. Set REPO_ROOT to put external/ and data/ elsewhere (e.g. to reuse the
+# ~16 GB of conservation bigwigs already on disk); EXTERNAL, HD_DIR, MIRBENCH_DIR, PHYLOP_BW
+# and PHASTCONS_BW override individually.
 # PIPELINE_DIR is where these scripts (and their siblings: the .py, patches/, envs/,
-# slurm/) live. Sibling-file references must use it, never "$REPO_ROOT/chimeric_eclip",
-# so they resolve in a flat clone too.
+# slurm/) live. Sibling-file references must use it, so they keep resolving when REPO_ROOT
+# is pointed somewhere else.
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -z "${REPO_ROOT:-}" ]; then
-    if [ "$(basename "$PIPELINE_DIR")" = "chimeric_eclip" ]; then
-        REPO_ROOT="$(dirname "$PIPELINE_DIR")"
-    else
-        REPO_ROOT="$PIPELINE_DIR"
-    fi
-fi
+REPO_ROOT="${REPO_ROOT:-$PIPELINE_DIR}"
 export PIPELINE_DIR REPO_ROOT
 EXTERNAL="${EXTERNAL:-$REPO_ROOT/external}"
 HD_DIR="${HD_DIR:-$EXTERNAL/HybriDetector}"

@@ -39,8 +39,8 @@ upstream this writes no train/test split: the novel set is an evaluation set in 
 
 Usage:
     make_matched_negatives.py --novel data/gse297116_positives_novel_v7.tsv \
-        --pool chimeric_eclip/data/step6_add_conservation/gse297116...train....tsv \
-               chimeric_eclip/data/step6_add_conservation/gse297116...test....tsv \
+        --pool data/step6_add_conservation/gse297116...train....tsv \
+               data/step6_add_conservation/gse297116...test....tsv \
         --output data/gse297116_novel_labelled_v7.tsv
 """
 import argparse

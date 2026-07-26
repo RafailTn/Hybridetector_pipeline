@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stage 4 — turn HybriDetector hybrids into a labelled, miRBench-style v7 dataset.
 #
-#   bash chimeric_eclip/04_make_dataset.sh external/HybriDetector/hyb_pairs data/newset
+#   bash 04_make_dataset.sh external/HybriDetector/hyb_pairs data/newset
 #
 # WHICH SAMPLES GO IN: HybriDetector hardwires all of its per-sample hybrid tables into
 # one shared external/HybriDetector/hyb_pairs/ directory, which ACCUMULATES across every
@@ -10,7 +10,7 @@
 # single dataset. So pass one or more sample-name globs to pick exactly the samples for
 # THIS dataset — matched against the filename prefix, i.e. the stage-3 <sample> name:
 #
-#   bash chimeric_eclip/04_make_dataset.sh external/HybriDetector/hyb_pairs \
+#   bash 04_make_dataset.sh external/HybriDetector/hyb_pairs \
 #        data/cytoplasm 'HCT116_cytoplasm_*'
 #
 # With no globs it takes every table in the directory (back-compatible, and correct when

@@ -1,7 +1,5 @@
-# For a FLAT CLONE of this pipeline (scripts at the repo root): the working root is this
-# directory, so setup.sh and the stages create their output folders right here. Keep them
-# out of git. In the thesis layout the root is the PARENT and these live one level up,
-# covered by the thesis-root .gitignore, so the entries below then match nothing and are inert.
+# The working root is this directory: setup.sh and the stages create their output folders
+# right here. Keep them out of git.
 # NB: .gitignore has no inline comments — a trailing "# ..." becomes part of the pattern.
 
 # the HybriDetector + miRBench_paper clones (setup.sh)

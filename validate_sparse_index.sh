@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Does --genomeSAsparseD 2 change the alignments, or only the RAM?
 #
-#   bash chimeric_eclip/validate_sparse_index.sh [n_reads]
+#   bash validate_sparse_index.sh [n_reads]
 #
 # hybridetector-local.patch builds the hg38 index with a sparse suffix array (every 2nd
 # suffix) so it fits this 31 GB host. STAR documents that flag as a memory/speed knob,
