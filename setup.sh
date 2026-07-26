@@ -71,9 +71,15 @@ else
 fi
 
 # ── environments ───────────────────────────────────────────────────────────
+# An existing env is UPDATED, not skipped. Skipping meant an env built before a spec
+# changed never gained the new dependency, and the gap surfaced much later as a
+# ModuleNotFoundError from whichever script needed it — polars in mirbench_pp did exactly
+# this, added to the yml months after the env was first built. No --prune: the jq install
+# below, and anything else added by hand, has to survive the update.
 for env_name in hybridetector eclip_pp eclip_dl mirbench_pp; do
     if "$MICROMAMBA" env list | grep -qE "^\s+$env_name\s"; then
-        echo "== env '$env_name' exists, skipping"
+        echo "== env '$env_name' exists, updating from $env_name.yml"
+        "$MICROMAMBA" env update -y -n "$env_name" -f "$ENVS_DIR/$env_name.yml"
     else
         echo "== creating env '$env_name'"
         "$MICROMAMBA" create -y -f "$ENVS_DIR/$env_name.yml"

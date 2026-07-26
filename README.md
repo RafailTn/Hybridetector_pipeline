@@ -45,8 +45,13 @@ micromamba rather than a single pinned environment.
 | `hybridetector` | stage 3 | snakemake 7.18.2 + mamba (the 13 per-rule envs — STAR, R/Bioconductor, ViennaRNA — are built on top) |
 | `mirbench_pp` | stage 4 | pandas, pyBigWig, pyranges, DECIPHER, genomic_region_annotator |
 
-> **Updating an existing clone.** `setup.sh` applies `hybridetector-fixes.patch` only to a
-> *clean* HybriDetector checkout — it detects an already-patched (dirty) working tree and
+> **Updating an existing clone.** Re-running `setup.sh` **does** refresh the four envs: an
+> existing one is updated from its `envs/*.yml` rather than skipped, so a dependency added
+> to a spec after the env was first built still lands. (It updates without `--prune`, so
+> anything installed by hand survives.)
+>
+> The **patches are the exception.** `setup.sh` applies `hybridetector-fixes.patch` only to
+> a *clean* HybriDetector checkout — it detects an already-patched (dirty) working tree and
 > skips, so it will **not** carry a later patch revision onto a clone you set up earlier.
 > When the patch changes (e.g. the `onstart` sparsity guard was added to it), refresh the
 > clone yourself: `git -C external/HybriDetector stash` (or `checkout .`) then re-run
